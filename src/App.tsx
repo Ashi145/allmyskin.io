@@ -30,6 +30,20 @@ export default function App() {
   const [session, setSession] = useState<Session | null>(() => getSession());
   const [tab, setTab] = useState<TabKey>("home");
 
+  /* Theme (persistent, applies globally) */
+  const [theme, setTheme] = useState<"light" | "dark" | "system">(() => {
+    try { return (localStorage.getItem("ams_theme") as "light" | "dark" | "system") || "light"; } catch { return "light"; }
+  });
+  useEffect(() => {
+    localStorage.setItem("ams_theme", theme);
+    const root = document.documentElement;
+    if (theme === "dark") {
+      root.classList.add("dark");
+    } else {
+      root.classList.remove("dark");
+    }
+  }, [theme]);
+
   /* Cart + wishlist persistent storage */
   const [cart, setCart] = useState<CartItem[]>(() => lsGet<CartItem[]>(CART_KEY, []));
   const [wishlist, setWishlist] = useState<string[]>(() => lsGet<string[]>(WISH_KEY, []));
@@ -216,7 +230,7 @@ export default function App() {
         {/* ACCOUNT (verified user/admin only) */}
         {isUser && (
           <section className={`tab-panel ${tab === "account" ? "is-active animate-fadeUp" : ""}`}>
-            <AccountTab session={session} onLogout={handleLogout} orders={orders} products={products} />
+            <AccountTab session={session} onLogout={handleLogout} orders={orders} products={products} theme={theme} setTheme={setTheme} />
           </section>
         )}
 
@@ -1153,25 +1167,11 @@ function ContactTab({ session }: { session: Session }) {
 }
 
 /* ============================ ACCOUNT ============================ */
-function AccountTab({ session, onLogout, orders, products }: { session: Session; onLogout: () => void; orders: Order[]; products: Product[] }) {
+function AccountTab({ session, onLogout, orders, products, theme, setTheme }: { session: Session; onLogout: () => void; orders: Order[]; products: Product[]; theme: "light" | "dark" | "system"; setTheme: (v: "light" | "dark" | "system") => void }) {
   const accounts = useMemo(() => getAccounts(), []);
   const me = accounts.find(a => a.uid === session.uid);
   const [subTab, setSubTab] = useState<"overview" | "transactions" | "settings" | "terms">("overview");
   const myOrders = useMemo(() => orders.filter(o => o.uid === session.uid), [orders, session.uid]);
-
-  const [theme, setTheme] = useState<"light" | "dark" | "system">(() => {
-    try { return (localStorage.getItem("ams_theme") as "light" | "dark" | "system") || "light"; } catch { return "light"; }
-  });
-
-  useEffect(() => {
-    localStorage.setItem("ams_theme", theme);
-    const root = document.documentElement;
-    if (theme === "dark") {
-      root.classList.add("dark");
-    } else {
-      root.classList.remove("dark");
-    }
-  }, [theme]);
 
   return (
     <div className="max-w-4xl mx-auto px-5 sm:px-12 lg:px-20 py-8 sm:py-14">
