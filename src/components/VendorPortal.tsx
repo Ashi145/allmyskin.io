@@ -1,8 +1,9 @@
 import { useState, Dispatch, SetStateAction } from "react";
 import { Product, Order, OrderStatus, ORDER_STATUS_FLOW, ORDER_STATUS_LABEL, Vendor, UGX } from "../data";
 import { SafeImage } from "./SafeImage";
+import { getWithdrawals, saveWithdrawal, Withdrawal } from "../auth";
 
-type SubTab = "overview" | "catalog" | "orders";
+type SubTab = "overview" | "catalog" | "orders" | "withdraw";
 
 const CATEGORIES: Product["category"][] = ["serum", "oil", "mask", "spf", "cleanser", "body"];
 
@@ -22,9 +23,18 @@ export default function VendorPortal({ vendorId, vendors, products, setProducts,
   const myRevenue = myOrders
     .filter(o => o.status !== "cancelled" && o.status !== "refunded")
     .reduce((sum, o) => sum + o.items.filter(i => i.vendorId === vendorId).reduce((s, i) => s + i.price * i.qty, 0), 0);
+  const totalSalesUnits = myOrders
+    .filter(o => o.status !== "cancelled" && o.status !== "refunded")
+    .reduce((sum, o) => sum + o.items.filter(i => i.vendorId === vendorId).reduce((s, i) => s + i.qty, 0), 0);
   const pendingOrders = myOrders.filter(o => o.status === "placed" || o.status === "accepted" || o.status === "processing").length;
   const lowStock = myProducts.filter(p => p.stock > 0 && p.stock <= 5).length;
   const outOfStock = myProducts.filter(p => p.stock <= 0).length;
+  const vendorWithdrawals = getWithdrawals().filter(w => w.vendorId === vendorId);
+  const totalWithdrawn = vendorWithdrawals.filter(w => w.status === "approved").reduce((s, w) => s + w.amount, 0);
+  const pendingWithdrawal = vendorWithdrawals.filter(w => w.status === "pending").reduce((s, w) => s + w.amount, 0);
+  const withdrawableBalance = Math.max(0, myRevenue - totalWithdrawn);
+
+  const [withdrawAmount, setWithdrawAmount] = useState("");
 
   const [newProduct, setNewProduct] = useState({
     name: "", tagline: "", price: "", category: "serum" as Product["category"], image: "", stock: "10", description: "", ingredients: "",
@@ -47,6 +57,17 @@ export default function VendorPortal({ vendorId, vendors, products, setProducts,
     };
     setProducts(prev => [p, ...prev]);
     setNewProduct({ name: "", tagline: "", price: "", category: "serum", image: "", stock: "10", description: "", ingredients: "" });
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = ev.target?.result as string;
+      setNewProduct(s => ({ ...s, image: dataUrl }));
+    };
+    reader.readAsDataURL(file);
   };
 
   const updateProduct = (id: string, patch: Partial<Product>) => {
@@ -78,23 +99,27 @@ export default function VendorPortal({ vendorId, vendors, products, setProducts,
       </p>
 
       <div className="flex gap-2 mb-8 border-b border-[var(--color-outline-variant)]/50 overflow-x-auto">
-        {(["overview", "catalog", "orders"] as SubTab[]).map(s => (
+        {(["overview", "catalog", "orders", "withdraw"] as SubTab[]).map(s => (
           <button
             key={s}
             onClick={() => setSub(s)}
             className={`px-4 py-2.5 text-[12px] uppercase tracking-widest font-semibold whitespace-nowrap border-b-2 transition ${sub === s ? "border-[var(--color-primary)] text-[var(--color-primary)]" : "border-transparent text-[var(--color-on-surface-variant)]"}`}
           >
-            {s === "overview" ? "Overview" : s === "catalog" ? "Catalog & inventory" : `Orders${pendingOrders ? ` (${pendingOrders})` : ""}`}
+            {s === "overview" ? "Overview" : s === "catalog" ? "Catalog & inventory" : s === "orders" ? `Orders${pendingOrders ? ` (${pendingOrders})` : ""}` : "Withdrawals"}
           </button>
         ))}
       </div>
 
       {sub === "overview" && (
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard icon="payments" label="Revenue (active orders)" value={UGX(myRevenue)} />
+          <StatCard icon="payments" label="Total revenue" value={UGX(myRevenue)} />
+          <StatCard icon="trending_up" label="Units sold" value={String(totalSalesUnits)} />
+          <StatCard icon="account_balance" label="Withdrawable" value={UGX(withdrawableBalance)} tone={withdrawableBalance > 0 ? "ok" : "neutral"} />
           <StatCard icon="pending_actions" label="Orders to fulfill" value={String(pendingOrders)} tone={pendingOrders > 0 ? "warn" : "ok"} />
           <StatCard icon="inventory_2" label="Low stock SKUs" value={String(lowStock)} tone={lowStock > 0 ? "warn" : "ok"} />
           <StatCard icon="block" label="Out of stock SKUs" value={String(outOfStock)} tone={outOfStock > 0 ? "bad" : "ok"} />
+          <StatCard icon="check_circle" label="Withdrawn total" value={UGX(totalWithdrawn)} tone={totalWithdrawn > 0 ? "ok" : "neutral"} />
+          <StatCard icon="hourglass_bottom" label="Pending withdrawal" value={UGX(pendingWithdrawal)} tone={pendingWithdrawal > 0 ? "warn" : "neutral"} />
         </div>
       )}
 
@@ -110,7 +135,18 @@ export default function VendorPortal({ vendorId, vendors, products, setProducts,
                 {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
               <input value={newProduct.stock} onChange={e => setNewProduct(s => ({ ...s, stock: e.target.value }))} type="number" placeholder="Starting stock" className="rounded-xl border border-[var(--color-outline-variant)] px-3 py-2.5 text-[13px] bg-white" />
-              <input value={newProduct.image} onChange={e => setNewProduct(s => ({ ...s, image: e.target.value }))} placeholder="Image URL (optional)" className="rounded-xl border border-[var(--color-outline-variant)] px-3 py-2.5 text-[13px] bg-white" />
+              <div className="flex items-center gap-2">
+                {newProduct.image && (
+                  <div className="w-10 h-10 rounded-lg overflow-hidden bg-[var(--color-surface-cream)] shrink-0 border border-[var(--color-outline-variant)]">
+                    <img src={newProduct.image} alt="Preview" className="w-full h-full object-cover" />
+                  </div>
+                )}
+                <label className="flex-1 flex items-center gap-2 rounded-xl border border-[var(--color-outline-variant)] px-3 py-2.5 text-[13px] bg-white cursor-pointer hover:bg-[var(--color-surface-cream)] transition">
+                  <span className="material-symbols-outlined text-[18px] text-[var(--color-on-surface-variant)]">upload</span>
+                  <span className="text-[var(--color-on-surface-variant)]">{newProduct.image ? "Change image" : "Upload image"}</span>
+                  <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+                </label>
+              </div>
               <textarea value={newProduct.description} onChange={e => setNewProduct(s => ({ ...s, description: e.target.value }))} placeholder="Description" className="sm:col-span-2 rounded-xl border border-[var(--color-outline-variant)] px-3 py-2.5 text-[13px] bg-white" rows={2} />
               <input value={newProduct.ingredients} onChange={e => setNewProduct(s => ({ ...s, ingredients: e.target.value }))} placeholder="Key ingredients, comma separated" className="sm:col-span-2 rounded-xl border border-[var(--color-outline-variant)] px-3 py-2.5 text-[13px] bg-white" />
             </div>
@@ -209,6 +245,73 @@ export default function VendorPortal({ vendorId, vendors, products, setProducts,
           <p className="text-[11px] text-[var(--color-on-surface-variant)] pt-2">
             Note: this prototype updates order status at the whole-order level. A production build would track fulfillment per vendor within a split order.
           </p>
+        </div>
+      )}
+
+      {/* WITHDRAW TAB */}
+      {sub === "withdraw" && (
+        <div className="space-y-6">
+          <div className="grid sm:grid-cols-3 gap-4">
+            <StatCard icon="account_balance" label="Withdrawable balance" value={UGX(withdrawableBalance)} tone={withdrawableBalance > 0 ? "ok" : "neutral"} />
+            <StatCard icon="check_circle" label="Withdrawn total" value={UGX(totalWithdrawn)} tone={totalWithdrawn > 0 ? "ok" : "neutral"} />
+            <StatCard icon="hourglass_bottom" label="Pending requests" value={UGX(pendingWithdrawal)} tone={pendingWithdrawal > 0 ? "warn" : "neutral"} />
+          </div>
+
+          <div className="bg-[var(--color-surface-cream)] rounded-3xl p-6">
+            <h3 className="font-display text-[17px] text-[var(--color-primary)] font-semibold mb-4">Request a withdrawal</h3>
+            <p className="text-[13px] text-[var(--color-on-surface-variant)] mb-4">
+              Your withdrawable balance is <strong>{UGX(withdrawableBalance)}</strong>. Minimum withdrawal is UGX 10,000.
+            </p>
+            <div className="flex gap-3 items-end">
+              <div className="flex-1">
+                <label className="text-[11px] uppercase tracking-widest font-semibold text-[var(--color-on-surface-variant)] block mb-1">Amount (UGX)</label>
+                <input value={withdrawAmount} onChange={e => setWithdrawAmount(e.target.value)} type="number" placeholder="10000" min={10000} max={withdrawableBalance}
+                  className="w-full rounded-xl border border-[var(--color-outline-variant)] px-4 py-3 text-[14px] bg-white" />
+              </div>
+              <button onClick={() => {
+                const amt = Number(withdrawAmount);
+                if (amt < 10000) { alert("Minimum withdrawal is UGX 10,000."); return; }
+                if (amt > withdrawableBalance) { alert("Amount exceeds withdrawable balance."); return; }
+                const w: Withdrawal = {
+                  id: "wd_" + Date.now().toString(36),
+                  vendorId,
+                  vendorName: vendor?.name || "Unknown",
+                  amount: amt,
+                  status: "pending",
+                  requestedAt: Date.now(),
+                };
+                saveWithdrawal(w);
+                setWithdrawAmount("");
+                alert("Withdrawal request submitted. The admin will review it shortly.");
+                window.location.reload();
+              }} className="bg-[var(--color-primary)] text-white px-6 py-3 rounded-full text-[12px] uppercase tracking-widest font-semibold">
+                Request withdrawal
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <h3 className="font-display text-[17px] text-[var(--color-primary)] font-semibold mb-4">Withdrawal history ({vendorWithdrawals.length})</h3>
+            {vendorWithdrawals.length === 0 ? (
+              <p className="text-[13px] text-[var(--color-on-surface-variant)]">No withdrawal requests yet.</p>
+            ) : (
+              <div className="space-y-3">
+                {[...vendorWithdrawals].sort((a, b) => b.requestedAt - a.requestedAt).map(w => (
+                  <div key={w.id} className="bg-white rounded-2xl border border-[var(--color-outline-variant)]/40 soft-shadow p-4 flex items-center justify-between">
+                    <div>
+                      <div className="text-[15px] font-semibold text-[var(--color-primary)]">{UGX(w.amount)}</div>
+                      <div className="text-[12px] text-[var(--color-on-surface-variant)]">{new Date(w.requestedAt).toLocaleDateString()}</div>
+                    </div>
+                    <span className={`text-[10px] uppercase tracking-widest font-bold px-3 py-1.5 rounded-full ${
+                      w.status === "approved" ? "bg-emerald-100 text-emerald-700" :
+                      w.status === "rejected" ? "bg-red-100 text-red-600" :
+                      "bg-amber-100 text-amber-700"
+                    }`}>{w.status}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

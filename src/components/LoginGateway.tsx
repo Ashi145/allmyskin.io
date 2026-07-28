@@ -17,6 +17,7 @@ export default function LoginGateway({ onAuthed }: Props) {
   const [rEmail, setREmail] = useState("");
   const [rPassword, setRPassword] = useState("");
   const [rPhone, setRPhone] = useState("");
+  const [rCategory, setRCategory] = useState<"buyer" | "seller">("buyer");
 
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -38,7 +39,7 @@ export default function LoginGateway({ onAuthed }: Props) {
     setError(null);
     setBusy(true);
     setTimeout(() => {
-      const r = registerAccount({ name: rName, email: rEmail, password: rPassword, phone: rPhone });
+      const r = registerAccount({ name: rName, email: rEmail, password: rPassword, phone: rPhone, category: rCategory });
       if (!r.ok || !r.account) { setBusy(false); setError(r.error || "Registration failed"); return; }
       const login = loginWithCredentials(rEmail, rPassword);
       setBusy(false);
@@ -189,6 +190,24 @@ export default function LoginGateway({ onAuthed }: Props) {
                 <Field label="Email" icon="mail" type="email" value={rEmail} onChange={setREmail} placeholder="you@example.com" required />
                 <Field label="Phone (optional)" icon="call" value={rPhone} onChange={setRPhone} placeholder="+256 7XX XXX XXX" />
                 <Field label="Password" icon="lock" type="password" value={rPassword} onChange={setRPassword} placeholder="Min. 6 characters" required />
+
+                <div className="bg-white/[0.06] rounded-2xl p-4 border border-white/10">
+                  <div className="text-[10px] uppercase tracking-[0.2em] text-white/50 font-semibold mb-3">I'm here to</div>
+                  <div className="flex gap-2">
+                    {[
+                      { value: "buyer" as const, icon: "shopping_bag", label: "Buy products" },
+                      { value: "seller" as const, icon: "storefront", label: "Sell products" },
+                    ].map(opt => (
+                      <button key={opt.value} type="button" onClick={() => setRCategory(opt.value)}
+                        className={`flex-1 flex flex-col items-center gap-1.5 py-3 px-3 rounded-xl border transition ${
+                          rCategory === opt.value ? "bg-white/10 border-white/30 text-white" : "border-white/10 text-white/50 hover:border-white/20"
+                        }`}>
+                        <span className="material-symbols-outlined text-[20px]">{opt.icon}</span>
+                        <span className="text-[11px] font-semibold">{opt.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
                 <button type="submit" disabled={busy}
                   className="w-full py-3.5 rounded-full bg-[#FA9090] text-[#2D2926] font-semibold text-[14px] hover:bg-[#ff9d9d] transition disabled:opacity-50 flex items-center justify-center gap-2">

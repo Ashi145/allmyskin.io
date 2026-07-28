@@ -29,6 +29,7 @@ export type Account = {
   createdAt: number;
   vendorId?: string;
   clinicId?: string;
+  category?: "buyer" | "seller";
 };
 
 const NS = "ams_app_v5_";
@@ -59,6 +60,32 @@ export function lsDel(key: string) {
   try { localStorage.removeItem(key); } catch {}
 }
 
+export const WITHDRAWALS_KEY = NS + "withdrawals";
+
+export type Withdrawal = {
+  id: string;
+  vendorId: string;
+  vendorName: string;
+  amount: number;
+  status: "pending" | "approved" | "rejected";
+  requestedAt: number;
+  resolvedAt?: number;
+};
+
+export function getWithdrawals(): Withdrawal[] {
+  return lsGet<Withdrawal[]>(WITHDRAWALS_KEY, []);
+}
+
+export function saveWithdrawal(w: Withdrawal) {
+  const list = getWithdrawals();
+  lsSet(WITHDRAWALS_KEY, [w, ...list]);
+}
+
+export function updateWithdrawal(id: string, patch: Partial<Withdrawal>) {
+  const list = getWithdrawals();
+  lsSet(WITHDRAWALS_KEY, list.map(w => w.id === id ? { ...w, ...patch } : w));
+}
+
 /* ---------- accounts (demo seed) ---------- */
 const SEED_ACCOUNTS: Account[] = [
   { uid: "u_admin", name: "AllMySkin Owner", email: "owner@allmyskin.ug", password: "owner123", role: "admin", phone: "+256 700 100100", city: "Kampala", orders: 0, createdAt: Date.now() - 86400000 * 600 },
@@ -78,7 +105,7 @@ export function getAccounts(): Account[] {
   return all;
 }
 
-export function registerAccount(input: { name: string; email: string; password: string; phone?: string; city?: string }): { ok: boolean; error?: string; account?: Account } {
+export function registerAccount(input: { name: string; email: string; password: string; phone?: string; city?: string; category?: "buyer" | "seller" }): { ok: boolean; error?: string; account?: Account } {
   const accounts = getAccounts();
   const exists = accounts.find(a => a.email.toLowerCase() === input.email.toLowerCase());
   if (exists) return { ok: false, error: "An account with that email already exists." };
@@ -93,6 +120,7 @@ export function registerAccount(input: { name: string; email: string; password: 
     city: input.city,
     orders: 0,
     createdAt: Date.now(),
+    category: input.category,
   };
   lsSet(ACCOUNTS_KEY, [...accounts, acc]);
   return { ok: true, account: acc };

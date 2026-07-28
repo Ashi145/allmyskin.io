@@ -3,7 +3,7 @@ import {
   getSession, logout, Session,
   ADMIN_STRING_KEY, getAdminString, setAdminString,
   CART_KEY, WISH_KEY, lsGet, lsSet,
-  getAccounts, Account,
+  getAccounts, Account, Withdrawal, getWithdrawals, saveWithdrawal, updateWithdrawal,
 } from "./auth";
 import {
   PRODUCTS, UGX, HERO_IMAGE, LIFESTYLE_IMAGE, JOURNAL_IMAGE, PROMO_IMAGE_1, PROMO_IMAGE_2, Product,
@@ -319,6 +319,7 @@ export default function App() {
               setAdminString={(v) => { setAdminString(v); setAdminStringState(v); setToast("Configuration saved to localStorage"); }}
               products={products}
               setProducts={setProducts}
+              orders={orders}
             />
           </section>
         )}
@@ -1186,7 +1187,7 @@ function AccountTab({ session, onLogout, orders, products, theme, setTheme }: { 
           <div className="text-[13px] text-[var(--color-on-surface-variant)]">{session.email}</div>
           <div className="mt-2 inline-flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-bold bg-[var(--color-primary-container)]/40 text-[var(--color-on-primary-container)] px-2.5 py-1 rounded-full">
             <span className="material-symbols-outlined text-[12px]">verified</span>
-            Member
+            {me?.category === "seller" ? "Seller" : "Buyer"}
           </div>
           <div className="mt-5 space-y-1">
             {([
@@ -1393,16 +1394,19 @@ function ToggleRow({ label, desc, defaultOn }: { label: string; desc: string; de
 }
 
 /* ============================ ADMIN PANEL (dark glass) ============================ */
-function AdminPanel({ adminString, setAdminString, products, setProducts }: {
+function AdminPanel({ adminString, setAdminString, products, setProducts, orders }: {
   adminString: string;
   setAdminString: (v: string) => void;
   products: Product[];
   setProducts: (updater: (prev: Product[]) => Product[]) => void;
+  orders: Order[];
 }) {
   const [draft, setDraft] = useState(adminString);
   useEffect(() => setDraft(adminString), [adminString]);
+  const [adminTab, setAdminTab] = useState<"overview" | "inventory" | "vendors" | "withdrawals">("overview");
 
   const accounts = getAccounts();
+  const withdrawals = getWithdrawals();
   const [newProduct, setNewProduct] = useState({
     name: "",
     tagline: "",
@@ -1444,6 +1448,20 @@ function AdminPanel({ adminString, setAdminString, products, setProducts }: {
     setNewProduct({ name: "", tagline: "", price: "75000", stock: "10", category: "serum", image: "" });
   };
 
+  /* Vendor stats */
+  const vendorStats = VENDORS.map(v => {
+    const vendorOrders = orders.filter(o => o.items.some(i => i.vendorId === v.id));
+    const revenue = vendorOrders
+      .filter(o => o.status !== "cancelled" && o.status !== "refunded")
+      .reduce((sum, o) => sum + o.items.filter(i => i.vendorId === v.id).reduce((s, i) => s + i.price * i.qty, 0), 0);
+    const totalSales = vendorOrders.reduce((sum, o) => sum + o.items.filter(i => i.vendorId === v.id).reduce((s, i) => s + i.qty, 0), 0);
+    const vendorProducts = products.filter(p => p.vendorId === v.id);
+    const totalInventory = vendorProducts.reduce((sum, p) => sum + p.stock, 0);
+    const vendorWithdrawals = withdrawals.filter(w => w.vendorId === v.id);
+    const withdrawnAmount = vendorWithdrawals.filter(w => w.status === "approved").reduce((s, w) => s + w.amount, 0);
+    return { ...v, revenue, totalSales, totalInventory, vendorProducts, withdrawnAmount, pendingWithdrawals: vendorWithdrawals.filter(w => w.status === "pending").length };
+  });
+
   return (
     <div className="bg-[#0f172a] text-white min-h-[80vh] py-8 px-5 sm:px-12 lg:px-20 rounded-t-3xl md:rounded-3xl md:mt-6 md:mx-6 max-w-[1300px] mx-auto">
       <div className="flex items-center justify-between mb-6">
@@ -1459,191 +1477,331 @@ function AdminPanel({ adminString, setAdminString, products, setProducts }: {
         </div>
       </div>
 
-      {/* Live Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-7">
-        {[
-          ["Users", String(accounts.length), "person"],
-          ["Products", String(products.length), "inventory_2"],
-          ["Low stock", String(lowStock), "production_quantity_limits"],
-          ["Uptime", "99.97%", "monitoring"],
-        ].map(([l, v, ic]) => (
-          <div key={l} className="rounded-2xl bg-white/[0.04] border border-white/10 p-4 backdrop-blur-md">
-            <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-[#FA9090] text-[18px]">{ic}</span>
-              <span className="text-[10px] uppercase tracking-widest text-white/50">{l}</span>
-            </div>
-            <div className="text-[16px] sm:text-[18px] font-semibold mt-1">{v}</div>
-          </div>
+      {/* Admin Tabs */}
+      <div className="flex gap-2 mb-7 border-b border-white/10 overflow-x-auto">
+        {([
+          { id: "overview" as const, label: "Overview", icon: "dashboard" },
+          { id: "inventory" as const, label: "Inventory", icon: "inventory_2" },
+          { id: "vendors" as const, label: "Vendors", icon: "storefront" },
+          { id: "withdrawals" as const, label: "Withdrawals", icon: "payments" },
+        ]).map(t => (
+          <button key={t.id} onClick={() => setAdminTab(t.id)}
+            className={`flex items-center gap-2 px-4 py-2.5 text-[12px] uppercase tracking-widest font-semibold whitespace-nowrap border-b-2 transition ${
+              adminTab === t.id ? "border-[#FA9090] text-[#FA9090]" : "border-transparent text-white/50"
+            }`}>
+            <span className="material-symbols-outlined text-[16px]">{t.icon}</span>
+            {t.label}
+          </button>
         ))}
       </div>
 
-      {/* CONFIG STRING - persistent to localStorage */}
-      <section className="rounded-3xl bg-white/[0.03] border border-white/10 backdrop-blur-md p-6 sm:p-7 mb-6">
-        <div className="flex items-start gap-3 mb-4">
-          <span className="material-symbols-outlined text-[#FA9090] icon-fill text-[22px]">campaign</span>
-          <div>
-            <h2 className="font-display text-[20px] font-semibold">Global Announcement Banner</h2>
-            <p className="text-[12.5px] text-white/60 mt-0.5">
-              This string is persisted to <code className="bg-white/10 px-1.5 py-0.5 rounded text-[#FA9090]">localStorage</code> key
-              <code className="bg-white/10 px-1.5 py-0.5 rounded text-[#FA9090] ml-1">{ADMIN_STRING_KEY}</code>
-              and rendered live on the public Home page.
-            </p>
+      {/* OVERVIEW TAB */}
+      {adminTab === "overview" && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-7">
+            {[
+              ["Users", String(accounts.length), "person"],
+              ["Products", String(products.length), "inventory_2"],
+              ["Low stock", String(lowStock), "production_quantity_limits"],
+              ["Total revenue", UGX(vendorStats.reduce((s, v) => s + v.revenue, 0)), "payments"],
+            ].map(([l, v, ic]) => (
+              <div key={l} className="rounded-2xl bg-white/[0.04] border border-white/10 p-4 backdrop-blur-md">
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[#FA9090] text-[18px]">{ic}</span>
+                  <span className="text-[10px] uppercase tracking-widest text-white/50">{l}</span>
+                </div>
+                <div className="text-[16px] sm:text-[18px] font-semibold mt-1">{v}</div>
+              </div>
+            ))}
           </div>
-        </div>
-        <textarea
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          rows={3}
-          className="w-full bg-[#0f172a] border border-white/15 rounded-2xl px-4 py-3 text-[14px] text-white placeholder-white/30 focus:border-[#FA9090] outline-none resize-none font-mono"
-          placeholder="Type a global message…"
-        />
-        <div className="flex flex-wrap items-center gap-3 mt-3">
-          <button
-            onClick={() => setAdminString(draft)}
-            className="px-5 py-2.5 rounded-full bg-[#FA9090] text-[#2D2926] font-semibold text-[13px] hover:bg-[#ff9d9d] transition flex items-center gap-2"
-          >
-            <span className="material-symbols-outlined text-[18px]">save</span>
-            Save to localStorage
-          </button>
-          <button
-            onClick={() => { setDraft(""); setAdminString(""); }}
-            className="px-5 py-2.5 rounded-full border border-white/15 bg-white/[0.04] text-white text-[13px] font-semibold hover:bg-white/[0.08]"
-          >
-            Clear banner
-          </button>
-          <div className="text-[11px] text-white/40 ml-auto">
-            Persisted · {draft.length} chars
-          </div>
-        </div>
-      </section>
 
-      {/* USER TABLE */}
-      <section className="rounded-3xl bg-white/[0.03] border border-white/10 backdrop-blur-md p-6 sm:p-7 mb-6">
-        <div className="flex items-center gap-3 mb-5">
-          <span className="material-symbols-outlined text-[#FA9090] icon-fill text-[22px]">group</span>
-          <h2 className="font-display text-[20px] font-semibold">Registered Accounts</h2>
-          <span className="text-[11px] text-white/50">({accounts.length})</span>
-        </div>
-        <div className="overflow-x-auto -mx-2 px-2">
-          <table className="w-full text-[13px] min-w-[640px]">
-            <thead>
-              <tr className="text-left text-[10px] uppercase tracking-widest text-white/40">
-                <th className="py-3 font-semibold">Account</th>
-                <th className="font-semibold">Role</th>
-                <th className="font-semibold">City</th>
-                <th className="font-semibold">Orders</th>
-                <th className="font-semibold">Member since</th>
-              </tr>
-            </thead>
-            <tbody>
-              {accounts.map((a: Account) => (
-                <tr key={a.uid} className="border-t border-white/5">
-                  <td className="py-3.5">
-                    <div className="font-semibold text-white">{a.name}</div>
-                    <div className="text-[11px] text-white/50">{a.email}</div>
-                  </td>
-                  <td>
-                    <span className={`text-[10px] uppercase tracking-widest font-bold px-2.5 py-1 rounded-full ${a.role === "admin" ? "bg-[#FA9090]/20 text-[#FA9090] border border-[#FA9090]/30" : "bg-white/5 text-white/70 border border-white/10"}`}>
-                      {a.role}
-                    </span>
-                  </td>
-                  <td className="text-white/70">{a.city || "—"}</td>
-                  <td className="text-white/70">{a.orders ?? 0}</td>
-                  <td className="text-white/50 text-[12px]">{new Date(a.createdAt).toLocaleDateString()}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section className="rounded-3xl bg-white/[0.03] border border-white/10 backdrop-blur-md p-6 sm:p-7 mb-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
-          <div className="flex items-center gap-3">
-            <span className="material-symbols-outlined text-[#FA9090] icon-fill text-[22px]">inventory_2</span>
-            <div>
-              <h2 className="font-display text-[20px] font-semibold">Inventory</h2>
-              <p className="text-[12px] text-white/50">Edit stock, pricing, product images, and sale status. Changes save automatically.</p>
+          {/* CONFIG STRING */}
+          <section className="rounded-3xl bg-white/[0.03] border border-white/10 backdrop-blur-md p-6 sm:p-7 mb-6">
+            <div className="flex items-start gap-3 mb-4">
+              <span className="material-symbols-outlined text-[#FA9090] icon-fill text-[22px]">campaign</span>
+              <div>
+                <h2 className="font-display text-[20px] font-semibold">Global Announcement Banner</h2>
+                <p className="text-[12.5px] text-white/60 mt-0.5">
+                  This string is persisted to <code className="bg-white/10 px-1.5 py-0.5 rounded text-[#FA9090]">localStorage</code> key
+                  <code className="bg-white/10 px-1.5 py-0.5 rounded text-[#FA9090] ml-1">{ADMIN_STRING_KEY}</code>
+                  and rendered live on the public Home page.
+                </p>
+              </div>
             </div>
+            <textarea
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              rows={3}
+              className="w-full bg-[#0f172a] border border-white/15 rounded-2xl px-4 py-3 text-[14px] text-white placeholder-white/30 focus:border-[#FA9090] outline-none resize-none font-mono"
+              placeholder="Type a global message…"
+            />
+            <div className="flex flex-wrap items-center gap-3 mt-3">
+              <button
+                onClick={() => setAdminString(draft)}
+                className="px-5 py-2.5 rounded-full bg-[#FA9090] text-[#2D2926] font-semibold text-[13px] hover:bg-[#ff9d9d] transition flex items-center gap-2"
+              >
+                <span className="material-symbols-outlined text-[18px]">save</span>
+                Save to localStorage
+              </button>
+              <button
+                onClick={() => { setDraft(""); setAdminString(""); }}
+                className="px-5 py-2.5 rounded-full border border-white/15 bg-white/[0.04] text-white text-[13px] font-semibold hover:bg-white/[0.08]"
+              >
+                Clear banner
+              </button>
+              <div className="text-[11px] text-white/40 ml-auto">
+                Persisted · {draft.length} chars
+              </div>
+            </div>
+          </section>
+
+          {/* USER TABLE */}
+          <section className="rounded-3xl bg-white/[0.03] border border-white/10 backdrop-blur-md p-6 sm:p-7 mb-6">
+            <div className="flex items-center gap-3 mb-5">
+              <span className="material-symbols-outlined text-[#FA9090] icon-fill text-[22px]">group</span>
+              <h2 className="font-display text-[20px] font-semibold">Registered Accounts</h2>
+              <span className="text-[11px] text-white/50">({accounts.length})</span>
+            </div>
+            <div className="overflow-x-auto -mx-2 px-2">
+              <table className="w-full text-[13px] min-w-[640px]">
+                <thead>
+                  <tr className="text-left text-[10px] uppercase tracking-widest text-white/40">
+                    <th className="py-3 font-semibold">Account</th>
+                    <th className="font-semibold">Role</th>
+                    <th className="font-semibold">Category</th>
+                    <th className="font-semibold">City</th>
+                    <th className="font-semibold">Orders</th>
+                    <th className="font-semibold">Member since</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {accounts.map((a: Account) => (
+                    <tr key={a.uid} className="border-t border-white/5">
+                      <td className="py-3.5">
+                        <div className="font-semibold text-white">{a.name}</div>
+                        <div className="text-[11px] text-white/50">{a.email}</div>
+                      </td>
+                      <td>
+                        <span className={`text-[10px] uppercase tracking-widest font-bold px-2.5 py-1 rounded-full ${a.role === "admin" ? "bg-[#FA9090]/20 text-[#FA9090] border border-[#FA9090]/30" : "bg-white/5 text-white/70 border border-white/10"}`}>
+                          {a.role}
+                        </span>
+                      </td>
+                      <td>
+                        {a.category ? (
+                          <span className={`text-[10px] uppercase tracking-widest font-bold px-2.5 py-1 rounded-full ${a.category === "seller" ? "bg-emerald-500/20 text-emerald-400" : "bg-sky-500/20 text-sky-400"}`}>
+                            {a.category}
+                          </span>
+                        ) : <span className="text-white/30 text-[11px]">—</span>}
+                      </td>
+                      <td className="text-white/70">{a.city || "—"}</td>
+                      <td className="text-white/70">{a.orders ?? 0}</td>
+                      <td className="text-white/50 text-[12px]">{new Date(a.createdAt).toLocaleDateString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </>
+      )}
+
+      {/* INVENTORY TAB */}
+      {adminTab === "inventory" && (
+        <section className="rounded-3xl bg-white/[0.03] border border-white/10 backdrop-blur-md p-6 sm:p-7 mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+            <div className="flex items-center gap-3">
+              <span className="material-symbols-outlined text-[#FA9090] icon-fill text-[22px]">inventory_2</span>
+              <div>
+                <h2 className="font-display text-[20px] font-semibold">Inventory</h2>
+                <p className="text-[12px] text-white/50">Edit stock, pricing, product images, and sale status. Changes save automatically.</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setProducts(() => PRODUCTS)}
+              className="px-4 py-2 rounded-full border border-white/15 bg-white/[0.04] text-white text-[12px] font-semibold hover:bg-white/[0.08]"
+            >
+              Reset catalog
+            </button>
           </div>
-          <button
-            onClick={() => setProducts(() => PRODUCTS)}
-            className="px-4 py-2 rounded-full border border-white/15 bg-white/[0.04] text-white text-[12px] font-semibold hover:bg-white/[0.08]"
-          >
-            Reset catalog
-          </button>
-        </div>
 
-        <form onSubmit={addProduct} className="grid md:grid-cols-6 gap-3 mb-5">
-          <input value={newProduct.name} onChange={e => setNewProduct(v => ({ ...v, name: e.target.value }))} placeholder="Product name" className="md:col-span-2 bg-[#0f172a] border border-white/15 rounded-2xl px-3 py-2.5 text-[13px]" />
-          <input value={newProduct.tagline} onChange={e => setNewProduct(v => ({ ...v, tagline: e.target.value }))} placeholder="Tagline" className="bg-[#0f172a] border border-white/15 rounded-2xl px-3 py-2.5 text-[13px]" />
-          <select value={newProduct.category} onChange={e => setNewProduct(v => ({ ...v, category: e.target.value as Product["category"] }))} className="bg-[#0f172a] border border-white/15 rounded-2xl px-3 py-2.5 text-[13px]">
-            {["serum", "oil", "mask", "spf", "cleanser", "body"].map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-          <input value={newProduct.price} onChange={e => setNewProduct(v => ({ ...v, price: e.target.value }))} inputMode="numeric" placeholder="Price" className="bg-[#0f172a] border border-white/15 rounded-2xl px-3 py-2.5 text-[13px]" />
-          <input value={newProduct.stock} onChange={e => setNewProduct(v => ({ ...v, stock: e.target.value }))} inputMode="numeric" placeholder="Stock" className="bg-[#0f172a] border border-white/15 rounded-2xl px-3 py-2.5 text-[13px]" />
-          <input value={newProduct.image} onChange={e => setNewProduct(v => ({ ...v, image: e.target.value }))} placeholder="Image URL" className="md:col-span-5 bg-[#0f172a] border border-white/15 rounded-2xl px-3 py-2.5 text-[13px]" />
-          <button className="rounded-2xl bg-[#FA9090] text-[#2D2926] font-semibold text-[13px] flex items-center justify-center gap-2">
-            <span className="material-symbols-outlined text-[18px]">add</span>
-            Add product
-          </button>
-        </form>
+          <form onSubmit={addProduct} className="grid md:grid-cols-6 gap-3 mb-5">
+            <input value={newProduct.name} onChange={e => setNewProduct(v => ({ ...v, name: e.target.value }))} placeholder="Product name" className="md:col-span-2 bg-[#0f172a] border border-white/15 rounded-2xl px-3 py-2.5 text-[13px]" />
+            <input value={newProduct.tagline} onChange={e => setNewProduct(v => ({ ...v, tagline: e.target.value }))} placeholder="Tagline" className="bg-[#0f172a] border border-white/15 rounded-2xl px-3 py-2.5 text-[13px]" />
+            <select value={newProduct.category} onChange={e => setNewProduct(v => ({ ...v, category: e.target.value as Product["category"] }))} className="bg-[#0f172a] border border-white/15 rounded-2xl px-3 py-2.5 text-[13px]">
+              {["serum", "oil", "mask", "spf", "cleanser", "body"].map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <input value={newProduct.price} onChange={e => setNewProduct(v => ({ ...v, price: e.target.value }))} inputMode="numeric" placeholder="Price" className="bg-[#0f172a] border border-white/15 rounded-2xl px-3 py-2.5 text-[13px]" />
+            <input value={newProduct.stock} onChange={e => setNewProduct(v => ({ ...v, stock: e.target.value }))} inputMode="numeric" placeholder="Stock" className="bg-[#0f172a] border border-white/15 rounded-2xl px-3 py-2.5 text-[13px]" />
+            <input value={newProduct.image} onChange={e => setNewProduct(v => ({ ...v, image: e.target.value }))} placeholder="Image URL" className="md:col-span-5 bg-[#0f172a] border border-white/15 rounded-2xl px-3 py-2.5 text-[13px]" />
+            <button className="rounded-2xl bg-[#FA9090] text-[#2D2926] font-semibold text-[13px] flex items-center justify-center gap-2">
+              <span className="material-symbols-outlined text-[18px]">add</span>
+              Add product
+            </button>
+          </form>
 
-        <div className="overflow-x-auto -mx-2 px-2">
-          <table className="w-full text-[12.5px] min-w-[920px]">
-            <thead>
-              <tr className="text-left text-[10px] uppercase tracking-widest text-white/40">
-                <th className="py-3 font-semibold">Product</th>
-                <th className="font-semibold">Category</th>
-                <th className="font-semibold">Price</th>
-                <th className="font-semibold">Stock</th>
-                <th className="font-semibold">Status</th>
-                <th className="font-semibold">Image</th>
-                <th className="font-semibold text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {products.map(p => (
-                <tr key={p.id} className="border-t border-white/5 align-top">
-                  <td className="py-3 pr-3">
-                    <input value={p.name} onChange={e => updateProduct(p.id, { name: e.target.value })} className="w-full bg-white/[0.04] border border-white/10 rounded-xl px-3 py-2 text-white font-semibold" />
-                    <input value={p.tagline} onChange={e => updateProduct(p.id, { tagline: e.target.value })} className="mt-2 w-full bg-white/[0.04] border border-white/10 rounded-xl px-3 py-2 text-white/70" />
-                  </td>
-                  <td className="py-3 pr-3">
-                    <select value={p.category} onChange={e => updateProduct(p.id, { category: e.target.value as Product["category"] })} className="w-full bg-[#0f172a] border border-white/10 rounded-xl px-3 py-2">
-                      {["serum", "oil", "mask", "spf", "cleanser", "body"].map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                  </td>
-                  <td className="py-3 pr-3">
-                    <input value={p.price} onChange={e => updateProduct(p.id, { price: Number(e.target.value) || 0 })} inputMode="numeric" className="w-28 bg-white/[0.04] border border-white/10 rounded-xl px-3 py-2" />
-                  </td>
-                  <td className="py-3 pr-3">
-                    <div className="flex items-center gap-2">
-                      <button type="button" onClick={() => updateProduct(p.id, { stock: Math.max(0, p.stock - 1), inStock: p.stock - 1 > 0 })} className="w-8 h-8 rounded-full border border-white/15">-</button>
-                      <input value={p.stock} onChange={e => updateProduct(p.id, { stock: Number(e.target.value) || 0, inStock: Number(e.target.value) > 0 })} inputMode="numeric" className="w-16 text-center bg-white/[0.04] border border-white/10 rounded-xl px-2 py-2" />
-                      <button type="button" onClick={() => updateProduct(p.id, { stock: p.stock + 1, inStock: true })} className="w-8 h-8 rounded-full border border-white/15">+</button>
-                    </div>
-                  </td>
-                  <td className="py-3 pr-3">
-                    <label className="inline-flex items-center gap-2 text-[11px] uppercase tracking-widest">
-                      <input type="checkbox" checked={p.inStock && p.stock > 0} onChange={e => updateProduct(p.id, { inStock: e.target.checked, stock: e.target.checked && p.stock === 0 ? 1 : p.stock })} className="accent-[#FA9090]" />
-                      {p.inStock && p.stock > 0 ? "Live" : "Hidden"}
-                    </label>
-                  </td>
-                  <td className="py-3 pr-3">
-                    <input value={p.image} onChange={e => updateProduct(p.id, { image: e.target.value })} className="w-full bg-white/[0.04] border border-white/10 rounded-xl px-3 py-2 text-white/70" />
-                  </td>
-                  <td className="py-3 text-right">
-                    <button type="button" onClick={() => setProducts(prev => prev.filter(item => item.id !== p.id))} className="text-[#FA9090] text-[11px] uppercase tracking-widest font-semibold">
-                      Delete
-                    </button>
-                  </td>
+          <div className="overflow-x-auto -mx-2 px-2">
+            <table className="w-full text-[12.5px] min-w-[920px]">
+              <thead>
+                <tr className="text-left text-[10px] uppercase tracking-widest text-white/40">
+                  <th className="py-3 font-semibold">Product</th>
+                  <th className="font-semibold">Category</th>
+                  <th className="font-semibold">Price</th>
+                  <th className="font-semibold">Stock</th>
+                  <th className="font-semibold">Status</th>
+                  <th className="font-semibold">Image</th>
+                  <th className="font-semibold text-right">Action</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {products.map(p => (
+                  <tr key={p.id} className="border-t border-white/5 align-top">
+                    <td className="py-3 pr-3">
+                      <input value={p.name} onChange={e => updateProduct(p.id, { name: e.target.value })} className="w-full bg-white/[0.04] border border-white/10 rounded-xl px-3 py-2 text-white font-semibold" />
+                      <input value={p.tagline} onChange={e => updateProduct(p.id, { tagline: e.target.value })} className="mt-2 w-full bg-white/[0.04] border border-white/10 rounded-xl px-3 py-2 text-white/70" />
+                    </td>
+                    <td className="py-3 pr-3">
+                      <select value={p.category} onChange={e => updateProduct(p.id, { category: e.target.value as Product["category"] })} className="w-full bg-[#0f172a] border border-white/10 rounded-xl px-3 py-2">
+                        {["serum", "oil", "mask", "spf", "cleanser", "body"].map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </td>
+                    <td className="py-3 pr-3">
+                      <input value={p.price} onChange={e => updateProduct(p.id, { price: Number(e.target.value) || 0 })} inputMode="numeric" className="w-28 bg-white/[0.04] border border-white/10 rounded-xl px-3 py-2" />
+                    </td>
+                    <td className="py-3 pr-3">
+                      <div className="flex items-center gap-2">
+                        <button type="button" onClick={() => updateProduct(p.id, { stock: Math.max(0, p.stock - 1), inStock: p.stock - 1 > 0 })} className="w-8 h-8 rounded-full border border-white/15">-</button>
+                        <input value={p.stock} onChange={e => updateProduct(p.id, { stock: Number(e.target.value) || 0, inStock: Number(e.target.value) > 0 })} inputMode="numeric" className="w-16 text-center bg-white/[0.04] border border-white/10 rounded-xl px-2 py-2" />
+                        <button type="button" onClick={() => updateProduct(p.id, { stock: p.stock + 1, inStock: true })} className="w-8 h-8 rounded-full border border-white/15">+</button>
+                      </div>
+                    </td>
+                    <td className="py-3 pr-3">
+                      <label className="inline-flex items-center gap-2 text-[11px] uppercase tracking-widest">
+                        <input type="checkbox" checked={p.inStock && p.stock > 0} onChange={e => updateProduct(p.id, { inStock: e.target.checked, stock: e.target.checked && p.stock === 0 ? 1 : p.stock })} className="accent-[#FA9090]" />
+                        {p.inStock && p.stock > 0 ? "Live" : "Hidden"}
+                      </label>
+                    </td>
+                    <td className="py-3 pr-3">
+                      <input value={p.image} onChange={e => updateProduct(p.id, { image: e.target.value })} className="w-full bg-white/[0.04] border border-white/10 rounded-xl px-3 py-2 text-white/70" />
+                    </td>
+                    <td className="py-3 text-right">
+                      <button type="button" onClick={() => setProducts(prev => prev.filter(item => item.id !== p.id))} className="text-[#FA9090] text-[11px] uppercase tracking-widest font-semibold">
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {/* VENDORS TAB */}
+      {adminTab === "vendors" && (
+        <section className="rounded-3xl bg-white/[0.03] border border-white/10 backdrop-blur-md p-6 sm:p-7 mb-6">
+          <div className="flex items-center gap-3 mb-5">
+            <span className="material-symbols-outlined text-[#FA9090] icon-fill text-[22px]">storefront</span>
+            <h2 className="font-display text-[20px] font-semibold">Vendor Performance</h2>
+          </div>
+          <div className="overflow-x-auto -mx-2 px-2">
+            <table className="w-full text-[13px] min-w-[640px]">
+              <thead>
+                <tr className="text-left text-[10px] uppercase tracking-widest text-white/40">
+                  <th className="py-3 font-semibold">Vendor</th>
+                  <th className="font-semibold">Products</th>
+                  <th className="font-semibold">Inventory</th>
+                  <th className="font-semibold">Total Sales</th>
+                  <th className="font-semibold">Revenue</th>
+                  <th className="font-semibold">Withdrawn</th>
+                  <th className="font-semibold">Pending</th>
+                </tr>
+              </thead>
+              <tbody>
+                {vendorStats.map(v => (
+                  <tr key={v.id} className="border-t border-white/5">
+                    <td className="py-3.5">
+                      <div className="font-semibold text-white">{v.name}</div>
+                      <div className="text-[11px] text-white/50">{v.city}</div>
+                    </td>
+                    <td className="text-white/70">{v.vendorProducts.length}</td>
+                    <td className="text-white/70">{v.totalInventory}</td>
+                    <td className="text-white/70">{v.totalSales}</td>
+                    <td className="text-white/70">{UGX(v.revenue)}</td>
+                    <td className="text-white/70">{UGX(v.withdrawnAmount)}</td>
+                    <td>
+                      <span className={`text-[10px] uppercase tracking-widest font-bold px-2.5 py-1 rounded-full ${v.pendingWithdrawals > 0 ? "bg-amber-500/20 text-amber-400" : "text-white/50 bg-white/5"}`}>
+                        {v.pendingWithdrawals} pending
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {/* WITHDRAWALS TAB */}
+      {adminTab === "withdrawals" && (
+        <div className="space-y-5">
+          <section className="rounded-3xl bg-white/[0.03] border border-white/10 backdrop-blur-md p-6 sm:p-7">
+            <div className="flex items-center gap-3 mb-5">
+              <span className="material-symbols-outlined text-[#FA9090] icon-fill text-[22px]">payments</span>
+              <h2 className="font-display text-[20px] font-semibold">Withdrawal Requests</h2>
+              <span className="text-[11px] text-white/50">({withdrawals.length})</span>
+            </div>
+            {withdrawals.length === 0 ? (
+              <p className="text-[13px] text-white/50">No withdrawal requests yet.</p>
+            ) : (
+              <div className="overflow-x-auto -mx-2 px-2">
+                <table className="w-full text-[13px] min-w-[600px]">
+                  <thead>
+                    <tr className="text-left text-[10px] uppercase tracking-widest text-white/40">
+                      <th className="py-3 font-semibold">Vendor</th>
+                      <th className="font-semibold">Amount</th>
+                      <th className="font-semibold">Date</th>
+                      <th className="font-semibold">Status</th>
+                      <th className="font-semibold text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[...withdrawals].sort((a, b) => b.requestedAt - a.requestedAt).map(w => (
+                      <tr key={w.id} className="border-t border-white/5">
+                        <td className="py-3.5 font-semibold text-white">{w.vendorName}</td>
+                        <td className="text-white">{UGX(w.amount)}</td>
+                        <td className="text-white/50 text-[12px]">{new Date(w.requestedAt).toLocaleDateString()}</td>
+                        <td>
+                          <span className={`text-[10px] uppercase tracking-widest font-bold px-2.5 py-1 rounded-full ${
+                            w.status === "approved" ? "bg-emerald-500/20 text-emerald-400" :
+                            w.status === "rejected" ? "bg-red-500/20 text-red-400" :
+                            "bg-amber-500/20 text-amber-400"
+                          }`}>
+                            {w.status}
+                          </span>
+                        </td>
+                        <td className="text-right">
+                          {w.status === "pending" && (
+                            <div className="flex gap-2 justify-end">
+                              <button onClick={() => updateWithdrawal(w.id, { status: "approved", resolvedAt: Date.now() })}
+                                className="text-[11px] uppercase tracking-widest font-semibold px-3 py-1.5 rounded-full bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30">
+                                Approve
+                              </button>
+                              <button onClick={() => updateWithdrawal(w.id, { status: "rejected", resolvedAt: Date.now() })}
+                                className="text-[11px] uppercase tracking-widest font-semibold px-3 py-1.5 rounded-full bg-red-500/20 text-red-400 hover:bg-red-500/30">
+                                Reject
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
         </div>
-      </section>
+      )}
 
       <section className="rounded-3xl bg-white/[0.03] border border-white/10 backdrop-blur-md p-6 sm:p-7">
         <div className="flex items-center gap-3 mb-4">
