@@ -532,8 +532,10 @@ export default function App() {
         <AliaBot
           session={session}
           products={products}
+          tab={tab}
           justCheckedOut={justCheckedOut}
           onDismissCheckout={() => setJustCheckedOut(false)}
+          onSelectProduct={(id) => setProductOpen(id)}
         />
       )}
 
@@ -2026,7 +2028,7 @@ function ProductModal({ product, isGuest, inWish, onWish, onAdd, onClose, review
   const [submitted, setSubmitted] = useState(false);
 
   return (
-    <div className="fixed inset-0 z-[150] bg-black/55 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fadeUp" onClick={onClose}>
+    <div className="fixed inset-0 z-[155] bg-black/55 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fadeUp" onClick={onClose}>
       <div className="bg-white w-full max-w-2xl rounded-t-3xl sm:rounded-3xl overflow-hidden shadow-2xl flex flex-col sm:flex-row max-h-[92vh]" onClick={e => e.stopPropagation()}>
         <div className="relative w-full sm:w-1/2 aspect-square sm:aspect-auto bg-[var(--color-surface-cream)] shrink-0">
           <SafeImage src={product.image} alt={product.name} initials={product.name} className="w-full h-full object-cover" />
