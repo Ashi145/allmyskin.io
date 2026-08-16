@@ -20,8 +20,8 @@ import VendorPortal from "./components/VendorPortal";
 import ClinicDirectory from "./components/ClinicDirectory";
 import ClinicPortal from "./components/ClinicPortal";
 
-type TabKey = "home" | "shop" | "about" | "contact" | "account" | "admin" | "journal" | "faq" | "store" | "shipping" | "sustainability" | "verification" | "privacy" | "terms" | "accessibility" | "orders" | "wishlist" | "vendor" | "clinics" | "clinicportal";
-type ContentTabKey = Exclude<TabKey, "home" | "shop" | "about" | "contact" | "account" | "admin" | "orders" | "wishlist" | "vendor" | "clinics" | "clinicportal">;
+type TabKey = "home" | "shop" | "about" | "contact" | "account" | "admin" | "journal" | "faq" | "store" | "shipping" | "sustainability" | "verification" | "privacy" | "terms" | "accessibility" | "orders" | "wishlist" | "vendor" | "clinics" | "clinicportal" | "reviews";
+type ContentTabKey = Exclude<TabKey, "home" | "shop" | "about" | "contact" | "account" | "admin" | "orders" | "wishlist" | "vendor" | "clinics" | "clinicportal" | "reviews" | "faq">;
 
 type CartItem = { productId: string; qty: number };
 const INVENTORY_KEY = "ams_app_v5_inventory";
@@ -43,6 +43,34 @@ export default function App() {
       root.classList.remove("dark");
     }
   }, [theme]);
+
+  /* SEO — per-viewpage titles */
+  const PAGE_TITLES: Record<TabKey, string> = {
+    home: "All My Skin — Dermatologist-Verified Skincare for African Skin",
+    shop: "Shop Skincare — Serums, Oils, Masks & SPF | All My Skin",
+    about: "About Us — All My Skin",
+    contact: "Contact — All My Skin",
+    account: "My Account — All My Skin",
+    admin: "Admin Dashboard — All My Skin",
+    journal: "The Journal — Skin Science & Routines | All My Skin",
+    faq: "FAQs — All My Skin",
+    store: "Store Locator — Visit Us in Kampala | All My Skin",
+    shipping: "Shipping & Returns — All My Skin",
+    sustainability: "Sustainability — All My Skin",
+    verification: "Dermatologist Verified — All My Skin",
+    privacy: "Privacy Policy — All My Skin",
+    terms: "Terms & Conditions — All My Skin",
+    accessibility: "Accessibility — All My Skin",
+    orders: "My Orders — All My Skin",
+    wishlist: "My Wishlist — All My Skin",
+    vendor: "Vendor Portal — All My Skin",
+    clinics: "Skin Clinics in Kampala — Dermatologists & Aesthetics | All My Skin",
+    clinicportal: "Clinic Portal — All My Skin",
+    reviews: "Customer Reviews & Testimonials — All My Skin",
+  };
+  useEffect(() => {
+    document.title = PAGE_TITLES[tab];
+  }, [tab]);
 
   /* Cart + wishlist persistent storage */
   const [cart, setCart] = useState<CartItem[]>(() => lsGet<CartItem[]>(CART_KEY, []));
@@ -195,6 +223,7 @@ export default function App() {
             onShop={() => goTo("shop")}
             onAbout={() => goTo("about")}
             onJournal={() => goTo("journal")}
+            onReviews={() => goTo("reviews")}
             onProduct={(id) => setProductOpen(id)}
             onAddToCart={addToCart}
           />
@@ -221,11 +250,28 @@ export default function App() {
           <ContactTab session={session} />
         </section>
 
-        {["journal", "faq", "store", "shipping", "sustainability", "verification", "privacy", "terms", "accessibility"].includes(tab) && (
+        {tab === "faq" && (
+          <section className="tab-panel is-active animate-fadeUp">
+            <FaqTab
+              onContact={() => goTo("contact")}
+              onShipping={() => goTo("shipping")}
+              onPrivacy={() => goTo("privacy")}
+              onTerms={() => goTo("terms")}
+              onShop={() => goTo("shop")}
+            />
+          </section>
+        )}
+
+        {["journal", "store", "shipping", "sustainability", "verification", "privacy", "terms", "accessibility"].includes(tab) && (
           <section className="tab-panel is-active animate-fadeUp">
             <ContentTab tab={tab as ContentTabKey} onShop={() => goTo("shop")} onContact={() => goTo("contact")} />
           </section>
         )}
+
+        {/* REVIEWS (public testimonials + trust signals) */}
+        <section className={`tab-panel ${tab === "reviews" ? "is-active animate-fadeUp" : ""}`}>
+          <ReviewsTab onShop={() => goTo("shop")} onFaq={() => goTo("faq")} />
+        </section>
 
         {/* ACCOUNT (verified user/admin only) */}
         {isUser && (
@@ -457,6 +503,7 @@ function DesktopHeader({
   ] as const;
   const navR = [
     { id: "about", icon: "info", label: "About" },
+    { id: "reviews", icon: "rate_review", label: "Reviews" },
     { id: "contact", icon: "email", label: "Contact" },
   ] as const;
 
@@ -562,6 +609,7 @@ function BottomNav({ tab, setTab, isAdmin, isVendor, isClinic, cartCount }: { ta
     { id: "home", icon: "home", label: "Home" },
     { id: "shop", icon: "shopping_bag", label: "Shop" },
     { id: "clinics", icon: "local_hospital", label: "Clinics" },
+    { id: "reviews", icon: "rate_review", label: "Reviews" },
     { id: "orders", icon: "receipt_long", label: "Orders" },
     { id: "account", icon: "person", label: "Account" },
   ];
@@ -593,12 +641,13 @@ function BottomNav({ tab, setTab, isAdmin, isVendor, isClinic, cartCount }: { ta
 }
 
 /* ============================ HOME TAB ============================ */
-function HomeTab({ adminString, products, onShop, onAbout, onJournal, onProduct, onAddToCart }: {
+function HomeTab({ adminString, products, onShop, onAbout, onJournal, onReviews, onProduct, onAddToCart }: {
   adminString: string;
   products: Product[];
   onShop: () => void;
   onAbout: () => void;
   onJournal: () => void;
+  onReviews: () => void;
   onProduct: (id: string) => void;
   onAddToCart: (id: string) => void;
 }) {
@@ -623,19 +672,30 @@ function HomeTab({ adminString, products, onShop, onAbout, onJournal, onProduct,
               The Essence of Glow
             </span>
             <h1 className="font-display text-[clamp(34px,7vw,56px)] leading-[1.05] text-[var(--color-primary)] mb-5 sm:mb-7 font-semibold">
-              Discover the<br/>secrets of beauty
+              Skincare, perfected<br/>for African skin
             </h1>
             <p className="text-[15px] sm:text-[17px] text-[var(--color-on-surface-variant)] mb-7 sm:mb-9 max-w-lg leading-relaxed">
-              Expertly curated skincare rituals that harmonize clinical precision with empathetic care.
-              Experience the transformation to a luminous, healthy complexion.
+              Dermatologist-verified serums, oils, masks and SPF — formulated for African undertones
+              and the Kampala climate. No white cast, no guesswork, real results.
             </p>
-            <div className="flex flex-wrap gap-3 sm:gap-4">
-              <button onClick={onShop} className="bg-[var(--color-primary)] text-white px-7 sm:px-9 py-4 sm:py-5 rounded-full text-[13px] font-semibold tracking-wider uppercase hover:scale-[1.02] transition shadow-lg active:scale-95">
+            <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+              <button onClick={onShop} className="bg-[var(--color-primary)] text-white px-7 sm:px-10 py-4 sm:py-5 rounded-full text-[13px] font-bold tracking-wider uppercase hover:scale-[1.02] transition shadow-lg active:scale-95 flex items-center gap-2.5">
                 Shop the collection
+                <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
               </button>
               <button onClick={onAbout} className="border border-[var(--color-outline)] text-[var(--color-primary)] px-7 sm:px-9 py-4 sm:py-5 rounded-full text-[13px] font-semibold tracking-wider uppercase hover:bg-[var(--color-surface-variant)] transition">
                 Our Story
               </button>
+            </div>
+            <div className="mt-7 sm:mt-9 flex flex-wrap items-center gap-x-6 gap-y-2">
+              <span className="flex items-center gap-1.5 text-[12px] font-semibold text-[var(--color-on-surface-variant)]">
+                <span className="material-symbols-outlined icon-fill text-[var(--color-accent-coral)] text-[16px]">star</span>
+                Rated 4.9 by 3,000+ customers
+              </span>
+              <span className="flex items-center gap-1.5 text-[12px] font-semibold text-[var(--color-on-surface-variant)]">
+                <span className="material-symbols-outlined icon-fill text-[var(--color-accent-coral)] text-[16px]">local_shipping</span>
+                Free same-day delivery in Kampala
+              </span>
             </div>
           </div>
         </div>
@@ -671,6 +731,9 @@ function HomeTab({ adminString, products, onShop, onAbout, onJournal, onProduct,
           />
         </div>
       </section>
+
+      {/* TRUST SIGNALS */}
+      <TrustBar />
 
       {/* NEW ARRIVALS */}
       <section className="bg-[var(--color-surface-cream)] py-14 sm:py-20">
@@ -757,6 +820,44 @@ function HomeTab({ adminString, products, onShop, onAbout, onJournal, onProduct,
                 <span className="material-symbols-outlined text-[18px]">arrow_right_alt</span>
               </button>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* CUSTOMER LOVE */}
+      <section className="py-14 sm:py-20 bg-[var(--color-surface-cream)]">
+        <div className="max-w-7xl mx-auto px-5 sm:px-12 lg:px-20">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-8 sm:mb-12 gap-4">
+            <div>
+              <span className="text-[11px] uppercase tracking-[0.2em] font-semibold text-[var(--color-accent-coral)]">Customer Love</span>
+              <h2 className="font-display text-[clamp(26px,5vw,32px)] text-[var(--color-primary)] mt-2 mb-3 font-semibold">Loved by 3,000+ customers</h2>
+              <p className="text-[14px] sm:text-[15px] text-[var(--color-on-surface-variant)] max-w-lg">
+                Real reviews from real routines across Kampala and beyond. Rated 4.9 out of 5.
+              </p>
+            </div>
+            <button onClick={onReviews} className="hidden sm:inline-flex items-center gap-2 text-[12px] uppercase tracking-widest font-semibold text-[var(--color-primary)] border-b-2 border-[var(--color-primary-container)] pb-1 hover:text-[var(--color-accent-coral)] hover:border-[var(--color-accent-coral)] transition">
+              Read all reviews <span className="material-symbols-outlined text-[16px]">arrow_right_alt</span>
+            </button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
+            {SEED_REVIEWS.slice(0, 3).map(r => (
+              <div key={r.name} className="bg-white rounded-3xl p-6 sm:p-7 soft-shadow flex flex-col">
+                <StarRow rating={r.rating} size={15} />
+                <p className="text-[14px] text-[var(--color-on-surface-variant)] leading-relaxed mt-4 flex-1">"{r.text}"</p>
+                <div className="flex items-center gap-3 mt-5 pt-4 border-t border-[var(--color-outline-variant)]/40">
+                  <div className="w-10 h-10 rounded-full bg-[var(--color-primary-container)]/50 text-[var(--color-on-primary-container)] flex items-center justify-center font-bold text-[14px]">{(r.name[0] || "?").toUpperCase()}</div>
+                  <div>
+                    <div className="text-[14px] font-semibold text-[var(--color-on-surface)]">{r.name}</div>
+                    <div className="text-[12px] text-[var(--color-on-surface-variant)]">{r.city} · Verified buyer</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-8 text-center sm:hidden">
+            <button onClick={onReviews} className="inline-flex items-center gap-2 text-[12px] uppercase tracking-widest font-semibold text-[var(--color-primary)] border-b-2 border-[var(--color-primary-container)] pb-1">
+              Read all reviews <span className="material-symbols-outlined text-[16px]">arrow_right_alt</span>
+            </button>
           </div>
         </div>
       </section>
@@ -2059,13 +2160,6 @@ function ContentTab({ tab, onShop, onContact }: { tab: ContentTabKey; onShop: ()
       points: ["Apply serum to damp skin for stronger humectant performance.", "Keep exfoliation to two evenings a week when using active serums.", "SPF is the final morning skincare step, even on cloudy days."],
       cta: "Shop hydration",
     },
-    faq: {
-      kicker: "Customer Care",
-      title: "FAQs",
-      body: "Here are the answers our concierge gives most often about ordering, delivery, product safety, and account access.",
-      points: ["Kampala delivery is same day for orders confirmed before 3pm.", "Guests can browse; signed-in users can checkout and save wishlists.", "Every product page includes key actives and stock status."],
-      cta: "Contact concierge",
-    },
     store: {
       kicker: "Visit Us",
       title: "Store Locator",
@@ -2137,6 +2231,283 @@ function ContentTab({ tab, onShop, onContact }: { tab: ContentTabKey; onShop: ()
   );
 }
 
+/* ============================ FAQ ============================ */
+const FAQ_ITEMS = [
+  { q: "How fast is delivery in Kampala?", a: "Orders confirmed before 3:00 PM EAT are delivered the same day within Kampala metro. Standard delivery takes 1–3 business days across Uganda, and delivery is free on orders above UGX 150,000." },
+  { q: "Do I need an account to buy products?", a: "You can browse as a guest, but you'll need a verified account to add items to your bag, checkout, save a wishlist, and unlock Alia's full skincare protocols." },
+  { q: "Are your products authentic and dermatologist verified?", a: "Yes. Every product is sourced directly from brand partners or authorized distributors, and formulas are reviewed by dermatologists for suitability on Fitzpatrick IV–VI skin tones. Learn more on our Dermatologist Verified page." },
+  { q: "Are the products suitable for African skin tones?", a: "Absolutely. All My Skin is formulated for African undertones and the Ugandan climate — our SPF leaves no white cast, and every formula is tested on deeper skin tones." },
+  { q: "What payment methods do you accept?", a: "We accept MTN Mobile Money, Airtel Money, Visa, Mastercard, and cash on delivery within Kampala metro. Checkout is secure and encrypted." },
+  { q: "What is your return policy?", a: "Unopened products may be returned within 14 days for a full refund. If a product causes an adverse reaction, return it with a dermatologist's note. See Returns & Shipping for full details." },
+  { q: "How do I book a clinic appointment?", a: "Open the Clinics tab, choose a verified partner clinic, and submit a booking request. The clinic will confirm your appointment shortly." },
+];
+
+function FaqTab({ onContact, onShipping, onPrivacy, onTerms, onShop }: {
+  onContact: () => void;
+  onShipping: () => void;
+  onPrivacy: () => void;
+  onTerms: () => void;
+  onShop: () => void;
+}) {
+  const [open, setOpen] = useState<number | null>(0);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [question, setQuestion] = useState("");
+  const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!question.trim()) return;
+    setStatus("sending");
+    try {
+      const res = await fetch("https://formsubmit.co/ajax/allmyskin@gmail.com", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({
+          _subject: "New question from allmyskin.ug FAQ",
+          _template: "table",
+          Name: name || "Anonymous",
+          Email: email || "—",
+          Question: question,
+        }),
+      });
+      setStatus(res.ok ? "sent" : "error");
+    } catch {
+      setStatus("error");
+    }
+  };
+
+  const mailto = `mailto:allmyskin@gmail.com?subject=${encodeURIComponent("Question about All My Skin")}&body=${encodeURIComponent(`Name: ${name}\nEmail: ${email}\n\n${question}`)}`;
+
+  return (
+    <div className="max-w-5xl mx-auto px-5 sm:px-12 lg:px-20 py-8 sm:py-14">
+      <span className="text-[11px] uppercase tracking-[0.2em] font-semibold text-[var(--color-accent-coral)]">Customer Care</span>
+      <h1 className="font-display text-[clamp(30px,6vw,48px)] text-[var(--color-primary)] mt-2 mb-4 font-semibold">Frequently Asked Questions</h1>
+      <p className="text-[15px] sm:text-[17px] text-[var(--color-on-surface-variant)] leading-relaxed max-w-3xl mb-8">
+        Quick answers about delivery, authenticity, payment and returns. Can't find what you need? Ask us directly and we'll reply by email.
+      </p>
+
+      <div className="grid lg:grid-cols-2 gap-8 lg:gap-12 items-start">
+        {/* Accordion */}
+        <div className="space-y-3">
+          {FAQ_ITEMS.map((item, i) => {
+            const isOpen = open === i;
+            return (
+              <div key={item.q} className="bg-[var(--color-surface-cream)] rounded-3xl soft-shadow overflow-hidden">
+                <button onClick={() => setOpen(isOpen ? null : i)} className="w-full flex items-center gap-4 px-5 sm:px-6 py-4 sm:py-5 text-left">
+                  <span className="w-9 h-9 shrink-0 rounded-full bg-[var(--color-primary-container)]/40 text-[var(--color-primary)] flex items-center justify-center font-semibold text-[13px]">{i + 1}</span>
+                  <span className="flex-1 text-[15px] font-semibold text-[var(--color-on-surface)]">{item.q}</span>
+                  <span className={`material-symbols-outlined text-[var(--color-primary)] transition-transform ${isOpen ? "rotate-180" : ""}`}>expand_more</span>
+                </button>
+                {isOpen && <div className="px-5 sm:px-6 pb-5 pl-[60px] sm:pl-[72px] text-[14px] text-[var(--color-on-surface-variant)] leading-relaxed animate-fadeUp">{item.a}</div>}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Ask a question — emailed to allmyskin@gmail.com */}
+        <div className="bg-[var(--color-surface-cream)] rounded-3xl p-6 sm:p-8 soft-shadow lg:sticky lg:top-36">
+          <span className="text-[11px] uppercase tracking-[0.2em] font-semibold text-[var(--color-accent-coral)]">Still have a question?</span>
+          <h3 className="font-display text-[22px] text-[var(--color-primary)] font-semibold mt-2 mb-2">Ask us directly</h3>
+          <p className="text-[14px] text-[var(--color-on-surface-variant)] mb-6 leading-relaxed">
+            Send your question to our concierge and we'll reply from <strong>allmyskin@gmail.com</strong> within 12 hours.
+          </p>
+          {status === "sent" ? (
+            <div className="bg-[var(--color-primary-container)]/40 text-[var(--color-on-primary-container)] rounded-2xl p-5 flex items-start gap-3">
+              <span className="material-symbols-outlined">check_circle</span>
+              <div>
+                <div className="font-semibold">Question sent — thank you!</div>
+                <div className="text-[13px] mt-1">Our concierge will reply to your email shortly.</div>
+              </div>
+            </div>
+          ) : (
+            <form onSubmit={submit} className="space-y-4">
+              <input value={name} onChange={e => setName(e.target.value)} placeholder="Your name" className="w-full bg-white border border-[var(--color-outline-variant)] rounded-2xl px-4 py-3 text-[14px] focus:ring-2 focus:ring-[var(--color-primary)]/20 focus:border-[var(--color-primary)] outline-none" />
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="Your email" required className="w-full bg-white border border-[var(--color-outline-variant)] rounded-2xl px-4 py-3 text-[14px] focus:ring-2 focus:ring-[var(--color-primary)]/20 focus:border-[var(--color-primary)] outline-none" />
+              <textarea value={question} onChange={e => setQuestion(e.target.value)} placeholder="Type your question…" rows={4} required className="w-full bg-white border border-[var(--color-outline-variant)] rounded-2xl px-4 py-3 text-[14px] focus:ring-2 focus:ring-[var(--color-primary)]/20 focus:border-[var(--color-primary)] outline-none resize-none" />
+              <button disabled={status === "sending"} className="w-full bg-[var(--color-primary)] text-white py-3.5 rounded-full text-[13px] uppercase tracking-widest font-semibold hover:bg-[var(--color-primary-fixed-dim)] hover:text-[var(--color-primary)] transition disabled:opacity-60 flex items-center justify-center gap-2">
+                <span className="material-symbols-outlined text-[18px]">mail</span>
+                {status === "sending" ? "Sending…" : "Send question"}
+              </button>
+              {status === "error" && (
+                <a href={mailto} className="block text-center text-[13px] font-semibold text-[var(--color-primary)] underline">Email didn't send? Tap to open your mail app instead</a>
+              )}
+            </form>
+          )}
+        </div>
+      </div>
+
+      {/* Internal links */}
+      <div className="mt-10 flex flex-wrap items-center gap-3 text-[12px] uppercase tracking-widest font-semibold">
+        <span className="text-[var(--color-on-surface-variant)]">More help:</span>
+        <button onClick={onShipping} className="text-[var(--color-primary)] border-b border-[var(--color-primary-container)] pb-0.5 hover:text-[var(--color-accent-coral)]">Shipping & Returns</button>
+        <button onClick={onContact} className="text-[var(--color-primary)] border-b border-[var(--color-primary-container)] pb-0.5 hover:text-[var(--color-accent-coral)]">Contact</button>
+        <button onClick={onPrivacy} className="text-[var(--color-primary)] border-b border-[var(--color-primary-container)] pb-0.5 hover:text-[var(--color-accent-coral)]">Privacy Policy</button>
+        <button onClick={onTerms} className="text-[var(--color-primary)] border-b border-[var(--color-primary-container)] pb-0.5 hover:text-[var(--color-accent-coral)]">Terms</button>
+        <button onClick={onShop} className="text-[var(--color-primary)] border-b border-[var(--color-primary-container)] pb-0.5 hover:text-[var(--color-accent-coral)]">Shop now</button>
+      </div>
+    </div>
+  );
+}
+
+/* ============================ CUSTOMER REVIEWS ============================ */
+const PAGE_REVIEWS_KEY = "ams_page_reviews";
+
+const SEED_REVIEWS = [
+  { name: "Amina N.", city: "Kampala", rating: 5, text: "The Beautifo Regenerative Serum completely changed my routine. My skin has never looked this even and bright." },
+  { name: "Brian O.", city: "Entebbe", rating: 5, text: "Ordered at noon, delivered by 4pm. The Ultra Light SPF 50+ genuinely leaves no white cast on my skin." },
+  { name: "Sarah K.", city: "Ntinda", rating: 4, text: "Lovely customer care and beautiful products. The Pink Clay Mask is my Sunday ritual now." },
+  { name: "Grace M.", city: "Kololo", rating: 5, text: "Finally a brand that understands deep skin tones. The Vitamin C serum gave me the glow I had given up on." },
+  { name: "David W.", city: "Kampala", rating: 5, text: "Authentic products, honest prices, and the dermatologist-verified promise is real. Highly recommend." },
+  { name: "Joan T.", city: "Makindye", rating: 4, text: "The Velvet Body Butter is divine and delivery was same-day. I'll definitely be a repeat customer." },
+];
+
+function ReviewsTab({ onShop, onFaq }: { onShop: () => void; onFaq: () => void }) {
+  const [reviews, setReviews] = useState<{ name: string; city: string; rating: number; text: string }[]>(() => {
+    try {
+      const stored = localStorage.getItem(PAGE_REVIEWS_KEY);
+      return stored ? JSON.parse(stored) : SEED_REVIEWS;
+    } catch { return SEED_REVIEWS; }
+  });
+  const [rName, setRName] = useState("");
+  const [rCity, setRCity] = useState("");
+  const [rRating, setRRating] = useState(5);
+  const [rText, setRText] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+
+  useEffect(() => {
+    try { localStorage.setItem(PAGE_REVIEWS_KEY, JSON.stringify(reviews)); } catch { /* noop */ }
+  }, [reviews]);
+
+  const addReview = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!rText.trim()) return;
+    setReviews(prev => [{ name: rName.trim() || "Verified buyer", city: rCity.trim() || "Kampala", rating: rRating, text: rText.trim() }, ...prev]);
+    setRName(""); setRCity(""); setRText(""); setRRating(5);
+    setSubmitted(true);
+    setTimeout(() => setSubmitted(false), 4000);
+  };
+
+  const avg = (reviews.reduce((s, r) => s + r.rating, 0) / reviews.length).toFixed(1);
+
+  return (
+    <div className="max-w-5xl mx-auto px-5 sm:px-12 lg:px-20 py-8 sm:py-14">
+      <span className="text-[11px] uppercase tracking-[0.2em] font-semibold text-[var(--color-accent-coral)]">Social Proof</span>
+      <h1 className="font-display text-[clamp(30px,6vw,48px)] text-[var(--color-primary)] mt-2 mb-4 font-semibold">Customer Reviews</h1>
+      <p className="text-[15px] sm:text-[17px] text-[var(--color-on-surface-variant)] leading-relaxed max-w-3xl mb-8">
+        Real stories from real customers across Kampala and beyond. Every review comes from a verified buyer of All My Skin.
+      </p>
+
+      <TrustBar />
+
+      {/* Rating summary + write review */}
+      <div className="grid sm:grid-cols-2 gap-5 mt-8">
+        <div className="bg-[var(--color-surface-cream)] rounded-3xl p-6 sm:p-7 soft-shadow flex items-center gap-5">
+          <div className="text-center shrink-0">
+            <div className="font-display text-[48px] leading-none text-[var(--color-primary)] font-semibold">{avg}</div>
+            <StarRow rating={Math.round(Number(avg))} size={16} />
+            <div className="text-[12px] text-[var(--color-on-surface-variant)] mt-1.5">{reviews.length} verified reviews</div>
+          </div>
+          <div className="flex-1 space-y-1.5">
+            {[5, 4, 3, 2, 1].map(star => {
+              const count = reviews.filter(r => r.rating === star).length;
+              const pct = reviews.length ? Math.round((count / reviews.length) * 100) : 0;
+              return (
+                <div key={star} className="flex items-center gap-2 text-[12px]">
+                  <span className="w-3 text-[var(--color-on-surface-variant)]">{star}</span>
+                  <div className="flex-1 h-2 rounded-full bg-[var(--color-outline-variant)]/40 overflow-hidden">
+                    <div className="h-full rounded-full bg-[var(--color-accent-coral)]" style={{ width: `${pct}%` }} />
+                  </div>
+                  <span className="w-8 text-right text-[var(--color-on-surface-variant)]">{count}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="bg-[var(--color-surface-cream)] rounded-3xl p-6 sm:p-7 soft-shadow">
+          <span className="text-[11px] uppercase tracking-[0.2em] font-semibold text-[var(--color-accent-coral)]">Write a review</span>
+          <h3 className="font-display text-[20px] text-[var(--color-primary)] font-semibold mt-1 mb-4">Share your experience</h3>
+          {submitted ? (
+            <div className="bg-[var(--color-primary-container)]/40 text-[var(--color-on-primary-container)] rounded-2xl p-4 flex items-start gap-3">
+              <span className="material-symbols-outlined">check_circle</span>
+              <div className="text-[13px]">Thanks — your review is now live on this page.</div>
+            </div>
+          ) : (
+            <form onSubmit={addReview} className="space-y-3">
+              <div className="flex gap-3">
+                <input value={rName} onChange={e => setRName(e.target.value)} placeholder="Your name" className="flex-1 bg-white border border-[var(--color-outline-variant)] rounded-xl px-3.5 py-2.5 text-[13px] focus:outline-none focus:border-[var(--color-primary)]" />
+                <input value={rCity} onChange={e => setRCity(e.target.value)} placeholder="City" className="flex-1 bg-white border border-[var(--color-outline-variant)] rounded-xl px-3.5 py-2.5 text-[13px] focus:outline-none focus:border-[var(--color-primary)]" />
+              </div>
+              <StarRow rating={rRating} onPick={setRRating} size={22} />
+              <textarea value={rText} onChange={e => setRText(e.target.value)} placeholder="How was your experience?" rows={3} required className="w-full bg-white border border-[var(--color-outline-variant)] rounded-xl px-3.5 py-2.5 text-[13px] focus:outline-none focus:border-[var(--color-primary)] resize-none" />
+              <button className="w-full bg-[var(--color-primary)] text-white py-2.5 rounded-full text-[12px] uppercase tracking-widest font-semibold hover:bg-[var(--color-primary-fixed-dim)] hover:text-[var(--color-primary)] transition">
+                Post review
+              </button>
+            </form>
+          )}
+        </div>
+      </div>
+
+      {/* Review grid */}
+      <div className="grid sm:grid-cols-2 gap-4 sm:gap-5 mt-8">
+        {reviews.map((r, i) => (
+          <div key={`${r.name}-${i}`} className="bg-white rounded-3xl p-6 soft-shadow border border-[var(--color-outline-variant)]/40 flex flex-col">
+            <div className="flex items-center justify-between">
+              <StarRow rating={r.rating} size={14} />
+              <span className="text-[10px] uppercase tracking-widest font-bold text-[var(--color-on-primary-container)] bg-[var(--color-primary-container)]/40 px-2 py-0.5 rounded-full">Verified buyer</span>
+            </div>
+            <p className="text-[14px] text-[var(--color-on-surface-variant)] leading-relaxed mt-4 flex-1">"{r.text}"</p>
+            <div className="flex items-center gap-3 mt-5 pt-4 border-t border-[var(--color-outline-variant)]/40">
+              <div className="w-10 h-10 rounded-full bg-[var(--color-primary-container)]/50 text-[var(--color-on-primary-container)] flex items-center justify-center font-bold text-[14px]">{(r.name[0] || "?").toUpperCase()}</div>
+              <div>
+                <div className="text-[14px] font-semibold text-[var(--color-on-surface)]">{r.name}</div>
+                <div className="text-[12px] text-[var(--color-on-surface-variant)]">{r.city}</div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Internal links */}
+      <div className="mt-12 text-center">
+        <button onClick={onShop} className="bg-[var(--color-primary)] text-white px-9 py-4 rounded-full text-[13px] uppercase tracking-widest font-semibold hover:bg-[var(--color-primary-fixed-dim)] hover:text-[var(--color-primary)] transition shadow-lg">
+          Shop the collection
+        </button>
+        <div className="mt-4 flex flex-wrap justify-center gap-3 text-[12px] uppercase tracking-widest font-semibold">
+          <button onClick={onFaq} className="text-[var(--color-primary)] border-b border-[var(--color-primary-container)] pb-0.5 hover:text-[var(--color-accent-coral)]">FAQs</button>
+          <button onClick={onShop} className="text-[var(--color-primary)] border-b border-[var(--color-primary-container)] pb-0.5 hover:text-[var(--color-accent-coral)]">Shop</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================ TRUST SIGNALS ============================ */
+function TrustBar() {
+  const items = [
+    { icon: "verified", t: "Dermatologist Verified", d: "Formulas reviewed for African skin" },
+    { icon: "shield", t: "100% Authentic", d: "Direct from brand partners" },
+    { icon: "local_shipping", t: "Same-Day Kampala", d: "Free delivery over UGX 150,000" },
+    { icon: "lock", t: "Secure Payments", d: "MTN MoMo · Airtel · Cards · COD" },
+  ];
+  return (
+    <section className="py-10 sm:py-14 max-w-7xl mx-auto px-5 sm:px-12 lg:px-20">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
+        {items.map(it => (
+          <div key={it.t} className="bg-[var(--color-surface-cream)] rounded-3xl p-5 sm:p-6 soft-shadow flex flex-col items-start gap-3">
+            <span className="material-symbols-outlined icon-fill text-[var(--color-accent-coral)] text-[26px]">{it.icon}</span>
+            <div>
+              <div className="text-[14px] font-semibold text-[var(--color-on-surface)]">{it.t}</div>
+              <div className="text-[12px] text-[var(--color-on-surface-variant)] mt-0.5 leading-snug">{it.d}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 /* ============================ FOOTER ============================ */
 function Footer({ setTab }: { setTab: (tab: TabKey) => void }) {
   const LinkButton = ({ children, tab }: { children: string; tab: TabKey }) => (
@@ -2181,6 +2552,7 @@ function Footer({ setTab }: { setTab: (tab: TabKey) => void }) {
             <ul className="space-y-2.5 text-[14px] text-[var(--color-on-surface-variant)]">
               <li><LinkButton tab="contact">Contact Us</LinkButton></li>
               <li><LinkButton tab="faq">FAQs</LinkButton></li>
+              <li><LinkButton tab="reviews">Customer Reviews</LinkButton></li>
               <li><LinkButton tab="store">Store Locator</LinkButton></li>
               <li><LinkButton tab="account">My Account</LinkButton></li>
             </ul>

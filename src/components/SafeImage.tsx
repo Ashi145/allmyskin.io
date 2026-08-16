@@ -44,6 +44,7 @@ export function SafeImage({
       className={className}
       loading={loading}
       fetchPriority={fetchPriority}
+      decoding="async"
       onError={() => setErrored(true)}
     />
   );

@@ -270,8 +270,8 @@ export const UGX = (n: number) =>
   new Intl.NumberFormat("en-UG", { style: "currency", currency: "UGX", maximumFractionDigits: 0 }).format(n);
 
 /* Lifestyle / editorial hero imagery (high quality) */
-export const HERO_IMAGE = "https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?auto=format&fit=crop&w=1600&q=80";
-export const LIFESTYLE_IMAGE = "https://images.unsplash.com/photo-1556228720-195a672e8a03?auto=format&fit=crop&w=1200&q=80";
-export const JOURNAL_IMAGE = "https://images.unsplash.com/photo-1556228453-efd6c1ff04f6?auto=format&fit=crop&w=1200&q=80";
+export const HERO_IMAGE = "https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?auto=format&fit=crop&w=1600&q=70";
+export const LIFESTYLE_IMAGE = "https://images.unsplash.com/photo-1556228720-195a672e8a03?auto=format&fit=crop&w=1200&q=70";
+export const JOURNAL_IMAGE = "https://images.unsplash.com/photo-1556228453-efd6c1ff04f6?auto=format&fit=crop&w=1200&q=70";
 export const PROMO_IMAGE_1 = "https://demo2.themelexus.com/beautifo/wp-content/uploads/2021/04/product-15-2.jpg";
-export const PROMO_IMAGE_2 = "https://images.unsplash.com/photo-1608248543803-ba4f8c70ae0b?auto=format&fit=crop&w=1200&q=80";
+export const PROMO_IMAGE_2 = "https://images.unsplash.com/photo-1608248543803-ba4f8c70ae0b?auto=format&fit=crop&w=1200&q=70";

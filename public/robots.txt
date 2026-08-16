@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /vendor
+Disallow: /clinicportal
+
+Sitemap: https://allmyskin.ug/sitemap.xml
