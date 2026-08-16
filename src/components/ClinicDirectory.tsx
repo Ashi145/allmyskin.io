@@ -2,24 +2,30 @@ import { useState } from "react";
 import { Clinic } from "../data";
 import { Session } from "../auth";
 import { SafeImage } from "./SafeImage";
+import { Breadcrumbs } from "./Breadcrumbs";
 
 type BookingPayload = { contact: string; reason: string; preferredDate: string };
 
-export default function ClinicDirectory({ clinics, isGuest, session, onRequireUser, onSubmit }: {
+export default function ClinicDirectory({ clinics, isGuest, session, onRequireUser, onSubmit, onNavigate }: {
   clinics: Clinic[];
   isGuest: boolean;
   session: Session;
   onRequireUser: () => boolean;
   onSubmit: (clinicId: string, payload: BookingPayload) => void;
+  onNavigate: (tab: string) => void;
 }) {
   const [specialty, setSpecialty] = useState<"all" | "Dermatology" | "Cosmetology">("all");
   const [openClinic, setOpenClinic] = useState<Clinic | null>(null);
   const [mode, setMode] = useState<"referral" | "appointment" | null>(null);
 
   const filtered = clinics.filter(c => specialty === "all" || c.specialty === specialty);
+  const mapQuery = (c: Clinic) => encodeURIComponent(`${c.name}, ${c.address}, Uganda`);
+  const mapsUrl = (c: Clinic) => `https://www.google.com/maps/search/?api=1&query=${mapQuery(c)}`;
+  const embedUrl = (c: Clinic) => `https://maps.google.com/maps?q=${mapQuery(c)}&t=&z=15&ie=UTF8&iwloc=&output=embed`;
 
   return (
     <div className="max-w-6xl mx-auto px-5 sm:px-12 lg:px-20 py-8 sm:py-14">
+      <Breadcrumbs trail={[{ label: "Home", onClick: () => onNavigate("home") }, { label: "Skin Clinics" }]} />
       <span className="text-[11px] uppercase tracking-[0.2em] font-semibold text-[var(--color-accent-coral)]">Partner Clinics</span>
       <h1 className="font-display text-[clamp(28px,5vw,40px)] text-[var(--color-primary)] mt-2 mb-4 font-semibold">Find verified dermatology &amp; cosmetology care</h1>
       <p className="text-[14px] text-[var(--color-on-surface-variant)] max-w-2xl mb-8 leading-relaxed">
@@ -55,6 +61,18 @@ export default function ClinicDirectory({ clinics, isGuest, session, onRequireUs
               <h3 className="font-display text-[17px] text-[var(--color-primary)] font-semibold mt-1">{clinic.name}</h3>
               <p className="text-[12.5px] text-[var(--color-on-surface-variant)] mt-1">{clinic.area}</p>
               <p className="text-[12px] text-[var(--color-on-surface-variant)] mt-2">{clinic.hours}</p>
+              <div className="mt-3 pt-3 border-t border-[var(--color-outline-variant)]/40 flex items-center justify-between">
+                <a
+                  href={mapsUrl(clinic)}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={e => e.stopPropagation()}
+                  className="inline-flex items-center gap-1.5 text-[11px] uppercase tracking-widest font-semibold text-[var(--color-primary)] hover:text-[var(--color-accent-coral)] transition"
+                >
+                  <span className="material-symbols-outlined text-[14px]">directions</span> Get directions
+                </a>
+                <span className="text-[10px] text-[var(--color-on-surface-variant)]">Verified · {clinic.area}</span>
+              </div>
             </div>
           </button>
         ))}
@@ -86,6 +104,31 @@ export default function ClinicDirectory({ clinics, isGuest, session, onRequireUs
                   {openClinic.services.map(s => (
                     <span key={s} className="text-[11px] px-2.5 py-1 bg-[var(--color-primary-container)]/30 text-[var(--color-on-primary-container)] rounded-full">{s}</span>
                   ))}
+                </div>
+              </div>
+
+              <div className="mt-5 rounded-2xl overflow-hidden border border-[var(--color-outline-variant)]/40">
+                <iframe
+                  title={`Map of ${openClinic.name}`}
+                  src={embedUrl(openClinic)}
+                  className="w-full h-[180px] border-0"
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
+                  allowFullScreen
+                />
+                <div className="bg-[var(--color-surface-cream)] px-4 py-2.5 flex items-center justify-between gap-2">
+                  <span className="text-[11px] text-[var(--color-on-surface-variant)] flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-[15px] text-[var(--color-primary)]">location_on</span>
+                    {openClinic.area}
+                  </span>
+                  <a
+                    href={mapsUrl(openClinic)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 text-[11px] uppercase tracking-widest font-semibold text-[var(--color-primary)] hover:text-[var(--color-accent-coral)] transition"
+                  >
+                    <span className="material-symbols-outlined text-[15px]">directions</span> Directions
+                  </a>
                 </div>
               </div>
 

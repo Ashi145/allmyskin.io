@@ -19,9 +19,10 @@ import WishlistTab from "./components/WishlistTab";
 import VendorPortal from "./components/VendorPortal";
 import ClinicDirectory from "./components/ClinicDirectory";
 import ClinicPortal from "./components/ClinicPortal";
+import { Breadcrumbs } from "./components/Breadcrumbs";
 
-type TabKey = "home" | "shop" | "about" | "contact" | "account" | "admin" | "journal" | "faq" | "store" | "shipping" | "sustainability" | "verification" | "privacy" | "terms" | "accessibility" | "orders" | "wishlist" | "vendor" | "clinics" | "clinicportal" | "reviews";
-type ContentTabKey = Exclude<TabKey, "home" | "shop" | "about" | "contact" | "account" | "admin" | "orders" | "wishlist" | "vendor" | "clinics" | "clinicportal" | "reviews" | "faq">;
+type TabKey = "home" | "shop" | "about" | "contact" | "account" | "admin" | "journal" | "faq" | "store" | "shipping" | "sustainability" | "verification" | "privacy" | "terms" | "accessibility" | "orders" | "wishlist" | "vendor" | "clinics" | "clinicportal" | "reviews" | "cases" | "thankyou";
+type ContentTabKey = Exclude<TabKey, "home" | "shop" | "about" | "contact" | "account" | "admin" | "orders" | "wishlist" | "vendor" | "clinics" | "clinicportal" | "reviews" | "faq" | "cases" | "thankyou">;
 
 type CartItem = { productId: string; qty: number };
 const INVENTORY_KEY = "ams_app_v5_inventory";
@@ -67,9 +68,58 @@ export default function App() {
     clinics: "Skin Clinics in Kampala — Dermatologists & Aesthetics | All My Skin",
     clinicportal: "Clinic Portal — All My Skin",
     reviews: "Customer Reviews & Testimonials — All My Skin",
+    cases: "Case Studies — Real Skincare Results | All My Skin",
+    thankyou: "Thank You — All My Skin",
   };
+
+  const BASE_URL = "https://allmyskin.ug";
+  const BREADCRUMBS: Record<TabKey, { name: string; url: string }[]> = {
+    home: [{ name: "Home", url: "/" }],
+    shop: [{ name: "Home", url: "/" }, { name: "Shop", url: "/shop" }],
+    about: [{ name: "Home", url: "/" }, { name: "About Us", url: "/about" }],
+    contact: [{ name: "Home", url: "/" }, { name: "Contact", url: "/contact" }],
+    faq: [{ name: "Home", url: "/" }, { name: "FAQs", url: "/faq" }],
+    reviews: [{ name: "Home", url: "/" }, { name: "Customer Reviews", url: "/reviews" }],
+    cases: [{ name: "Home", url: "/" }, { name: "Case Studies", url: "/cases" }],
+    clinics: [{ name: "Home", url: "/" }, { name: "Skin Clinics", url: "/clinics" }],
+    journal: [{ name: "Home", url: "/" }, { name: "The Journal", url: "/journal" }],
+    store: [{ name: "Home", url: "/" }, { name: "Store Locator", url: "/store" }],
+    shipping: [{ name: "Home", url: "/" }, { name: "Shipping & Returns", url: "/shipping" }],
+    sustainability: [{ name: "Home", url: "/" }, { name: "Sustainability", url: "/sustainability" }],
+    verification: [{ name: "Home", url: "/" }, { name: "Dermatologist Verified", url: "/verification" }],
+    privacy: [{ name: "Home", url: "/" }, { name: "Privacy Policy", url: "/privacy" }],
+    terms: [{ name: "Home", url: "/" }, { name: "Terms & Conditions", url: "/terms" }],
+    accessibility: [{ name: "Home", url: "/" }, { name: "Accessibility", url: "/accessibility" }],
+    account: [{ name: "Home", url: "/" }, { name: "My Account", url: "/account" }],
+    orders: [{ name: "Home", url: "/" }, { name: "My Orders", url: "/orders" }],
+    wishlist: [{ name: "Home", url: "/" }, { name: "My Wishlist", url: "/wishlist" }],
+    vendor: [{ name: "Home", url: "/" }, { name: "Vendor Portal", url: "/vendor" }],
+    clinicportal: [{ name: "Home", url: "/" }, { name: "Clinic Portal", url: "/clinicportal" }],
+    admin: [{ name: "Home", url: "/" }, { name: "Admin Dashboard", url: "/admin" }],
+    thankyou: [{ name: "Home", url: "/" }, { name: "Thank You", url: "/thankyou" }],
+  };
+
   useEffect(() => {
     document.title = PAGE_TITLES[tab];
+    const trail = BREADCRUMBS[tab].map((c, i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      name: c.name,
+      item: `${BASE_URL}${c.url}`,
+    }));
+    const schema = {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: trail,
+    };
+    let el = document.getElementById("breadcrumb-schema") as HTMLScriptElement | null;
+    if (!el) {
+      el = document.createElement("script");
+      el.id = "breadcrumb-schema";
+      el.type = "application/ld+json";
+      document.head.appendChild(el);
+    }
+    el.textContent = JSON.stringify(schema);
   }, [tab]);
 
   /* Cart + wishlist persistent storage */
@@ -224,6 +274,7 @@ export default function App() {
             onAbout={() => goTo("about")}
             onJournal={() => goTo("journal")}
             onReviews={() => goTo("reviews")}
+            onThanks={() => goTo("thankyou")}
             onProduct={(id) => setProductOpen(id)}
             onAddToCart={addToCart}
           />
@@ -237,22 +288,24 @@ export default function App() {
             wishlist={wishlist}
             onWish={toggleWish}
             products={products}
+            onHome={() => goTo("home")}
           />
         </section>
 
         {/* ABOUT */}
         <section className={`tab-panel ${tab === "about" ? "is-active animate-fadeUp" : ""}`}>
-          <AboutTab />
+          <AboutTab onHome={() => goTo("home")} />
         </section>
 
         {/* CONTACT */}
         <section className={`tab-panel ${tab === "contact" ? "is-active animate-fadeUp" : ""}`}>
-          <ContactTab session={session} />
+          <ContactTab session={session} onThanks={() => goTo("thankyou")} onHome={() => goTo("home")} />
         </section>
 
         {tab === "faq" && (
           <section className="tab-panel is-active animate-fadeUp">
             <FaqTab
+              onHome={() => goTo("home")}
               onContact={() => goTo("contact")}
               onShipping={() => goTo("shipping")}
               onPrivacy={() => goTo("privacy")}
@@ -264,13 +317,23 @@ export default function App() {
 
         {["journal", "store", "shipping", "sustainability", "verification", "privacy", "terms", "accessibility"].includes(tab) && (
           <section className="tab-panel is-active animate-fadeUp">
-            <ContentTab tab={tab as ContentTabKey} onShop={() => goTo("shop")} onContact={() => goTo("contact")} />
+            <ContentTab tab={tab as ContentTabKey} onShop={() => goTo("shop")} onContact={() => goTo("contact")} onHome={() => goTo("home")} />
           </section>
         )}
 
         {/* REVIEWS (public testimonials + trust signals) */}
         <section className={`tab-panel ${tab === "reviews" ? "is-active animate-fadeUp" : ""}`}>
-          <ReviewsTab onShop={() => goTo("shop")} onFaq={() => goTo("faq")} />
+          <ReviewsTab onShop={() => goTo("shop")} onFaq={() => goTo("faq")} onCases={() => goTo("cases")} onHome={() => goTo("home")} />
+        </section>
+
+        {/* CASE STUDIES (public) */}
+        <section className={`tab-panel ${tab === "cases" ? "is-active animate-fadeUp" : ""}`}>
+          <CasesTab onHome={() => goTo("home")} onShop={() => goTo("shop")} onReviews={() => goTo("reviews")} onBook={() => goTo("clinics")} />
+        </section>
+
+        {/* THANK YOU (post-submission) */}
+        <section className={`tab-panel ${tab === "thankyou" ? "is-active animate-fadeUp" : ""}`}>
+          <ThankYouTab onHome={() => goTo("home")} onShop={() => goTo("shop")} onReviews={() => goTo("reviews")} onContact={() => goTo("contact")} onFaq={() => goTo("faq")} />
         </section>
 
         {/* ACCOUNT (verified user/admin only) */}
@@ -314,6 +377,7 @@ export default function App() {
             isGuest={isGuest}
             session={session}
             onRequireUser={() => requireUser("book a clinic appointment")}
+            onNavigate={(t) => goTo(t as TabKey)}
             onSubmit={(clinicId, payload) => {
               setAppointments(prev => [{
                 id: "apt_" + Date.now().toString(36),
@@ -326,7 +390,7 @@ export default function App() {
                 status: "requested",
                 createdAt: Date.now(),
               }, ...prev]);
-              setToast("Request sent — the clinic will confirm shortly.");
+              goTo("thankyou");
             }}
           />
         </section>
@@ -378,6 +442,9 @@ export default function App() {
 
       {/* ============ BOTTOM NAV (mobile only) ============ */}
       <BottomNav tab={tab} setTab={goTo} isAdmin={isAdmin} isVendor={isVendor} isClinic={isClinic} cartCount={cartCount} />
+
+      {/* ============ STICKY SHOP CTA (mobile marketing pages) ============ */}
+      <StickyMobileCTA tab={tab} onShop={() => goTo("shop")} />
 
       {/* ============ PRODUCT MODAL ============ */}
       {activeProduct && (
@@ -641,13 +708,14 @@ function BottomNav({ tab, setTab, isAdmin, isVendor, isClinic, cartCount }: { ta
 }
 
 /* ============================ HOME TAB ============================ */
-function HomeTab({ adminString, products, onShop, onAbout, onJournal, onReviews, onProduct, onAddToCart }: {
+function HomeTab({ adminString, products, onShop, onAbout, onJournal, onReviews, onThanks, onProduct, onAddToCart }: {
   adminString: string;
   products: Product[];
   onShop: () => void;
   onAbout: () => void;
   onJournal: () => void;
   onReviews: () => void;
+  onThanks: () => void;
   onProduct: (id: string) => void;
   onAddToCart: (id: string) => void;
 }) {
@@ -869,7 +937,7 @@ function HomeTab({ adminString, products, onShop, onAbout, onJournal, onReviews,
           <p className="text-[15px] sm:text-[17px] text-[var(--color-on-surface-variant)] mb-8 max-w-xl mx-auto">
             Sign up now to receive expert tips, exclusive early access to new product launches, and 10% off your first order.
           </p>
-          <form className="flex flex-col sm:flex-row gap-3 max-w-lg mx-auto" onSubmit={(e) => { e.preventDefault(); alert("Subscribed — welcome to the inner circle ✨"); }}>
+          <form className="flex flex-col sm:flex-row gap-3 max-w-lg mx-auto" onSubmit={(e) => { e.preventDefault(); onThanks(); }}>
             <input
               type="email"
               required
@@ -971,12 +1039,13 @@ function ProductCard({ product, onOpen, onAdd }: { product: Product; onOpen: () 
 }
 
 /* ============================ SHOP TAB ============================ */
-function ShopTab({ onProduct, onAddToCart, wishlist, onWish, products }: {
+function ShopTab({ onProduct, onAddToCart, wishlist, onWish, products, onHome }: {
   onProduct: (id: string) => void;
   onAddToCart: (id: string) => void;
   wishlist: string[];
   onWish: (id: string) => void;
   products: Product[];
+  onHome: () => void;
 }) {
   const [cat, setCat] = useState<"all" | "serum" | "oil" | "mask" | "spf" | "cleanser" | "body">("all");
   const [query, setQuery] = useState("");
@@ -1004,6 +1073,7 @@ function ShopTab({ onProduct, onAddToCart, wishlist, onWish, products }: {
   return (
     <>
     <div className="max-w-7xl mx-auto px-5 sm:px-12 lg:px-20 py-6 sm:py-12">
+      <Breadcrumbs trail={[{ label: "Home", onClick: onHome }, { label: "Shop" }]} />
       <div className="mb-7 sm:mb-10">
         <span className="text-[11px] uppercase tracking-[0.2em] font-semibold text-[var(--color-accent-coral)]">Shop</span>
         <h1 className="font-display text-[clamp(28px,6vw,44px)] text-[var(--color-primary)] mt-2 mb-3 font-semibold">The Collection</h1>
@@ -1148,9 +1218,10 @@ function ShopTab({ onProduct, onAddToCart, wishlist, onWish, products }: {
 }
 
 /* ============================ ABOUT ============================ */
-function AboutTab() {
+function AboutTab({ onHome }: { onHome: () => void }) {
   return (
     <div className="max-w-5xl mx-auto px-5 sm:px-12 lg:px-20 py-8 sm:py-14">
+      <Breadcrumbs trail={[{ label: "Home", onClick: onHome }, { label: "About Us" }]} />
       <span className="text-[11px] uppercase tracking-[0.2em] font-semibold text-[var(--color-accent-coral)]">Our Story</span>
       <h1 className="font-display text-[clamp(30px,6vw,48px)] text-[var(--color-primary)] mt-2 mb-6 font-semibold">Empathetic skincare,<br/>clinically engineered.</h1>
       <p className="text-[15px] sm:text-[17px] text-[var(--color-on-surface-variant)] leading-relaxed max-w-3xl">
@@ -1192,12 +1263,16 @@ function AboutTab() {
 }
 
 /* ============================ CONTACT ============================ */
-function ContactTab({ session }: { session: Session }) {
+function ContactTab({ session, onThanks, onHome }: { session: Session; onThanks: () => void; onHome: () => void }) {
   const [sent, setSent] = useState(false);
   return (
     <div className="max-w-5xl mx-auto px-5 sm:px-12 lg:px-20 py-8 sm:py-14">
+      <Breadcrumbs trail={[{ label: "Home", onClick: onHome }, { label: "Contact" }]} />
       <span className="text-[11px] uppercase tracking-[0.2em] font-semibold text-[var(--color-accent-coral)]">Connect</span>
       <h1 className="font-display text-[clamp(30px,6vw,48px)] text-[var(--color-primary)] mt-2 mb-6 font-semibold">We're here for your skin journey.</h1>
+
+      {/* RESPONSE TIME PROMISE */}
+      <ResponseTimePromise onContact={onThanks} />
 
       {/* ALIA BOT PROMO */}
       <div className="bg-gradient-to-br from-[var(--color-primary)] to-[#3D6B62] rounded-3xl p-6 sm:p-8 mb-10 flex flex-col sm:flex-row items-start sm:items-center gap-5">
@@ -1253,7 +1328,7 @@ function ContactTab({ session }: { session: Session }) {
               </div>
             </div>
           ) : (
-            <form onSubmit={e => { e.preventDefault(); setSent(true); }} className="space-y-4">
+            <form onSubmit={e => { e.preventDefault(); setSent(true); onThanks(); }} className="space-y-4">
               <input defaultValue={session.name !== "Guest Visitor" ? session.name : ""} placeholder="Your name" required className="w-full bg-white border border-[var(--color-outline-variant)] rounded-2xl px-4 py-3 text-[14px] focus:ring-2 focus:ring-[var(--color-primary)]/20 focus:border-[var(--color-primary)] outline-none" />
               <input type="email" defaultValue={session.email} placeholder="Email" required className="w-full bg-white border border-[var(--color-outline-variant)] rounded-2xl px-4 py-3 text-[14px] focus:ring-2 focus:ring-[var(--color-primary)]/20 focus:border-[var(--color-primary)] outline-none" />
               <textarea placeholder="How can we help?" rows={5} required className="w-full bg-white border border-[var(--color-outline-variant)] rounded-2xl px-4 py-3 text-[14px] focus:ring-2 focus:ring-[var(--color-primary)]/20 focus:border-[var(--color-primary)] outline-none resize-none" />
@@ -2151,7 +2226,7 @@ function SignInPromptModal({ onClose, onSignIn }: { onClose: () => void; onSignI
 }
 
 /* ============================ CONTENT PAGES ============================ */
-function ContentTab({ tab, onShop, onContact }: { tab: ContentTabKey; onShop: () => void; onContact: () => void }) {
+function ContentTab({ tab, onShop, onContact, onHome }: { tab: ContentTabKey; onShop: () => void; onContact: () => void; onHome: () => void }) {
   const pages: Record<ContentTabKey, { kicker: string; title: string; body: string; points: string[]; cta?: string }> = {
     journal: {
       kicker: "The Journal",
@@ -2211,6 +2286,7 @@ function ContentTab({ tab, onShop, onContact }: { tab: ContentTabKey; onShop: ()
 
   return (
     <div className="max-w-5xl mx-auto px-5 sm:px-12 lg:px-20 py-8 sm:py-14">
+      <Breadcrumbs trail={[{ label: "Home", onClick: onHome }, { label: page.title }]} />
       <span className="text-[11px] uppercase tracking-[0.2em] font-semibold text-[var(--color-accent-coral)]">{page.kicker}</span>
       <h1 className="font-display text-[clamp(30px,6vw,48px)] text-[var(--color-primary)] mt-2 mb-6 font-semibold">{page.title}</h1>
       <p className="text-[15px] sm:text-[17px] text-[var(--color-on-surface-variant)] leading-relaxed max-w-3xl">{page.body}</p>
@@ -2242,7 +2318,8 @@ const FAQ_ITEMS = [
   { q: "How do I book a clinic appointment?", a: "Open the Clinics tab, choose a verified partner clinic, and submit a booking request. The clinic will confirm your appointment shortly." },
 ];
 
-function FaqTab({ onContact, onShipping, onPrivacy, onTerms, onShop }: {
+function FaqTab({ onHome, onContact, onShipping, onPrivacy, onTerms, onShop }: {
+  onHome: () => void;
   onContact: () => void;
   onShipping: () => void;
   onPrivacy: () => void;
@@ -2281,11 +2358,14 @@ function FaqTab({ onContact, onShipping, onPrivacy, onTerms, onShop }: {
 
   return (
     <div className="max-w-5xl mx-auto px-5 sm:px-12 lg:px-20 py-8 sm:py-14">
+      <Breadcrumbs trail={[{ label: "Home", onClick: onHome }, { label: "FAQs" }]} />
       <span className="text-[11px] uppercase tracking-[0.2em] font-semibold text-[var(--color-accent-coral)]">Customer Care</span>
       <h1 className="font-display text-[clamp(30px,6vw,48px)] text-[var(--color-primary)] mt-2 mb-4 font-semibold">Frequently Asked Questions</h1>
       <p className="text-[15px] sm:text-[17px] text-[var(--color-on-surface-variant)] leading-relaxed max-w-3xl mb-8">
         Quick answers about delivery, authenticity, payment and returns. Can't find what you need? Ask us directly and we'll reply by email.
       </p>
+
+      <ResponseTimePromise onContact={onContact} />
 
       <div className="grid lg:grid-cols-2 gap-8 lg:gap-12 items-start">
         {/* Accordion */}
@@ -2362,7 +2442,7 @@ const SEED_REVIEWS = [
   { name: "Joan T.", city: "Makindye", rating: 4, text: "The Velvet Body Butter is divine and delivery was same-day. I'll definitely be a repeat customer." },
 ];
 
-function ReviewsTab({ onShop, onFaq }: { onShop: () => void; onFaq: () => void }) {
+function ReviewsTab({ onShop, onFaq, onCases, onHome }: { onShop: () => void; onFaq: () => void; onCases: () => void; onHome: () => void }) {
   const [reviews, setReviews] = useState<{ name: string; city: string; rating: number; text: string }[]>(() => {
     try {
       const stored = localStorage.getItem(PAGE_REVIEWS_KEY);
@@ -2392,6 +2472,7 @@ function ReviewsTab({ onShop, onFaq }: { onShop: () => void; onFaq: () => void }
 
   return (
     <div className="max-w-5xl mx-auto px-5 sm:px-12 lg:px-20 py-8 sm:py-14">
+      <Breadcrumbs trail={[{ label: "Home", onClick: onHome }, { label: "Customer Reviews" }]} />
       <span className="text-[11px] uppercase tracking-[0.2em] font-semibold text-[var(--color-accent-coral)]">Social Proof</span>
       <h1 className="font-display text-[clamp(30px,6vw,48px)] text-[var(--color-primary)] mt-2 mb-4 font-semibold">Customer Reviews</h1>
       <p className="text-[15px] sm:text-[17px] text-[var(--color-on-surface-variant)] leading-relaxed max-w-3xl mb-8">
@@ -2476,6 +2557,7 @@ function ReviewsTab({ onShop, onFaq }: { onShop: () => void; onFaq: () => void }
         </button>
         <div className="mt-4 flex flex-wrap justify-center gap-3 text-[12px] uppercase tracking-widest font-semibold">
           <button onClick={onFaq} className="text-[var(--color-primary)] border-b border-[var(--color-primary-container)] pb-0.5 hover:text-[var(--color-accent-coral)]">FAQs</button>
+          <button onClick={onCases} className="text-[var(--color-primary)] border-b border-[var(--color-primary-container)] pb-0.5 hover:text-[var(--color-accent-coral)]">Case Studies</button>
           <button onClick={onShop} className="text-[var(--color-primary)] border-b border-[var(--color-primary-container)] pb-0.5 hover:text-[var(--color-accent-coral)]">Shop</button>
         </div>
       </div>
@@ -2505,6 +2587,181 @@ function TrustBar() {
         ))}
       </div>
     </section>
+  );
+}
+
+/* ============================ RESPONSE TIME PROMISE ============================ */
+function ResponseTimePromise({ onContact }: { onContact: () => void }) {
+  return (
+    <div className="mb-8 rounded-3xl bg-gradient-to-br from-[var(--color-primary)] to-[#3D6B62] text-white p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center gap-5">
+      <div className="w-14 h-14 shrink-0 rounded-2xl bg-white/20 flex items-center justify-center">
+        <span className="material-symbols-outlined text-[28px]">bolt</span>
+      </div>
+      <div className="flex-1">
+        <div className="font-display text-[20px] font-semibold">Our response-time promise</div>
+        <p className="text-[14px] text-white/80 mt-1 leading-relaxed">
+          Every message is answered within <strong className="text-white">12 hours, 7 days a week</strong> — by email, WhatsApp or phone.
+        </p>
+      </div>
+      <div className="flex flex-wrap gap-2 shrink-0">
+        <a href="mailto:concierge@allmyskin.ug" className="bg-white text-[var(--color-primary)] px-5 py-2.5 rounded-full text-[11px] uppercase tracking-widest font-semibold hover:bg-white/90 transition flex items-center gap-1.5">
+          <span className="material-symbols-outlined text-[16px]">mail</span> Email
+        </a>
+        <a href="https://wa.me/256700100100" target="_blank" rel="noreferrer" className="bg-white/15 border border-white/30 text-white px-5 py-2.5 rounded-full text-[11px] uppercase tracking-widest font-semibold hover:bg-white/25 transition flex items-center gap-1.5">
+          <span className="material-symbols-outlined text-[16px]">chat</span> WhatsApp
+        </a>
+      </div>
+    </div>
+  );
+}
+
+/* ============================ CASE STUDIES ============================ */
+const CASE_STUDIES = [
+  {
+    initials: "PN", age: "27", city: "Ntinda, Kampala", rating: 5,
+    concern: "Post-inflammatory hyperpigmentation & uneven tone after acne breakouts",
+    goal: "Even skin tone within 90 days",
+    protocol: ["Calming Oat Cleanser", "Vitamin C Brightening Serum", "Beautifo Regenerative Serum", "Ultra Light SPF 50+"],
+    timeline: "12 weeks",
+    results: "Visible lightening of dark spots; tone visibly more even",
+    quote: "The dark spots that had stayed for two years finally faded. Wearing SPF daily made the biggest difference.",
+  },
+  {
+    initials: "JM", age: "34", city: "Kololo, Kampala", rating: 5,
+    concern: "Dehydration, dullness and early fine lines from air-conditioned office life",
+    goal: "Bouncier, hydrated, luminous skin",
+    protocol: ["Calming Oat Cleanser", "Hydra Refresh Mask", "Botanical Glow Oil", "Beautifo Regenerative Serum"],
+    timeline: "8 weeks",
+    results: "Firmer, plumper skin; fine lines visibly softened",
+    quote: "Months of constant AC left my skin lifeless. The glow oil and mask brought it back within a month.",
+  },
+  {
+    initials: "AK", age: "22", city: "Makerere, Kampala", rating: 4,
+    concern: "Oily, congestion-prone skin with monthly breakouts",
+    goal: "Clearer, calmer skin with fewer flare-ups",
+    protocol: ["Calming Oat Cleanser", "Pink Clay Hydrating Mask", "Beautifo Regenerative Serum", "Ultra Light SPF 50+"],
+    timeline: "10 weeks",
+    results: "Fewer active breakouts; visibly clearer, tighter pores",
+    quote: "A simple, consistent routine with Alia's guidance fixed what years of products couldn't.",
+  },
+];
+
+function CasesTab({ onHome, onShop, onReviews, onBook }: { onHome: () => void; onShop: () => void; onReviews: () => void; onBook: () => void }) {
+  return (
+    <div className="max-w-5xl mx-auto px-5 sm:px-12 lg:px-20 py-8 sm:py-14">
+      <Breadcrumbs trail={[{ label: "Home", onClick: onHome }, { label: "Case Studies" }]} />
+      <span className="text-[11px] uppercase tracking-[0.2em] font-semibold text-[var(--color-accent-coral)]">Real Results</span>
+      <h1 className="font-display text-[clamp(30px,6vw,48px)] text-[var(--color-primary)] mt-2 mb-4 font-semibold">Case studies &amp; real results</h1>
+      <p className="text-[15px] sm:text-[17px] text-[var(--color-on-surface-variant)] leading-relaxed max-w-3xl mb-10">
+        Anonymized journeys from real customers. Each protocol was guided by All My Skin's dermatologist-reviewed guidance — results vary by individual.
+      </p>
+
+      <div className="space-y-6">
+        {CASE_STUDIES.map(cs => (
+          <div key={cs.initials} className="bg-white rounded-3xl soft-shadow border border-[var(--color-outline-variant)]/40 overflow-hidden">
+            <div className="p-6 sm:p-8">
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-full bg-[var(--color-primary-container)]/50 text-[var(--color-on-primary-container)] flex items-center justify-center font-bold">{cs.initials}</div>
+                  <div>
+                    <div className="text-[14px] font-semibold text-[var(--color-on-surface)]">{cs.age} · {cs.city}</div>
+                    <StarRow rating={cs.rating} size={13} />
+                  </div>
+                </div>
+                <span className="text-[10px] uppercase tracking-widest font-bold text-[var(--color-on-primary-container)] bg-[var(--color-primary-container)]/40 px-3 py-1 rounded-full">{cs.timeline}</span>
+              </div>
+              <div className="grid sm:grid-cols-3 gap-4 mb-5">
+                <div className="bg-[var(--color-surface-cream)] rounded-2xl p-4">
+                  <div className="text-[10px] uppercase tracking-widest font-semibold text-[var(--color-accent-coral)] mb-1">The concern</div>
+                  <p className="text-[13px] text-[var(--color-on-surface)] leading-relaxed">{cs.concern}</p>
+                </div>
+                <div className="bg-[var(--color-surface-cream)] rounded-2xl p-4">
+                  <div className="text-[10px] uppercase tracking-widest font-semibold text-[var(--color-accent-coral)] mb-1">The goal</div>
+                  <p className="text-[13px] text-[var(--color-on-surface)] leading-relaxed">{cs.goal}</p>
+                </div>
+                <div className="bg-[var(--color-surface-cream)] rounded-2xl p-4">
+                  <div className="text-[10px] uppercase tracking-widest font-semibold text-[var(--color-accent-coral)] mb-1">The result</div>
+                  <p className="text-[13px] text-[var(--color-on-surface)] leading-relaxed">{cs.results}</p>
+                </div>
+              </div>
+              <div className="mb-5">
+                <div className="text-[10px] uppercase tracking-widest font-semibold text-[var(--color-primary)] mb-2">Protocol used</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {cs.protocol.map(p => (
+                    <span key={p} className="text-[11px] px-2.5 py-1 bg-[var(--color-primary-container)]/30 text-[var(--color-on-primary-container)] rounded-full">{p}</span>
+                  ))}
+                </div>
+              </div>
+              <blockquote className="border-l-2 border-[var(--color-accent-coral)] pl-4 text-[14px] text-[var(--color-on-surface-variant)] italic leading-relaxed">"{cs.quote}"</blockquote>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-12 text-center">
+        <button onClick={onShop} className="bg-[var(--color-primary)] text-white px-9 py-4 rounded-full text-[13px] uppercase tracking-widest font-semibold hover:bg-[var(--color-primary-fixed-dim)] hover:text-[var(--color-primary)] transition shadow-lg">
+          Start your own ritual
+        </button>
+        <div className="mt-4 flex flex-wrap justify-center gap-3 text-[12px] uppercase tracking-widest font-semibold">
+          <button onClick={onReviews} className="text-[var(--color-primary)] border-b border-[var(--color-primary-container)] pb-0.5 hover:text-[var(--color-accent-coral)]">Customer Reviews</button>
+          <button onClick={onBook} className="text-[var(--color-primary)] border-b border-[var(--color-primary-container)] pb-0.5 hover:text-[var(--color-accent-coral)]">Book a Clinic</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================ THANK YOU ============================ */
+function ThankYouTab({ onHome, onShop, onReviews, onContact, onFaq }: { onHome: () => void; onShop: () => void; onReviews: () => void; onContact: () => void; onFaq: () => void }) {
+  return (
+    <div className="max-w-3xl mx-auto px-5 sm:px-12 lg:px-20 py-14 sm:py-20">
+      <Breadcrumbs trail={[{ label: "Home", onClick: onHome }, { label: "Thank You" }]} />
+      <div className="text-center">
+        <div className="w-20 h-20 mx-auto rounded-full bg-[var(--color-primary-container)]/40 flex items-center justify-center">
+          <span className="material-symbols-outlined icon-fill text-[var(--color-primary)] text-[40px]">check_circle</span>
+        </div>
+        <h1 className="font-display text-[clamp(30px,6vw,44px)] text-[var(--color-primary)] mt-6 font-semibold">Thank you!</h1>
+        <p className="text-[15px] sm:text-[17px] text-[var(--color-on-surface-variant)] mt-4 max-w-xl mx-auto leading-relaxed">
+          We've received your message. Our concierge will get back to you within 12 hours, 7 days a week.
+        </p>
+      </div>
+
+      <div className="mt-8">
+        <ResponseTimePromise onContact={onContact} />
+      </div>
+
+      <div className="grid sm:grid-cols-3 gap-4 text-left">
+        <button onClick={onShop} className="bg-white rounded-3xl p-6 soft-shadow border border-[var(--color-outline-variant)]/40 hover:border-[var(--color-primary)] transition text-left">
+          <span className="material-symbols-outlined icon-fill text-[var(--color-accent-coral)] text-[28px]">shopping_bag</span>
+          <div className="text-[15px] font-semibold text-[var(--color-on-surface)] mt-3">Shop the collection</div>
+          <div className="text-[12.5px] text-[var(--color-on-surface-variant)] mt-1 leading-relaxed">Browse serums, oils, masks and SPF for your skin.</div>
+        </button>
+        <button onClick={onReviews} className="bg-white rounded-3xl p-6 soft-shadow border border-[var(--color-outline-variant)]/40 hover:border-[var(--color-primary)] transition text-left">
+          <span className="material-symbols-outlined icon-fill text-[var(--color-accent-coral)] text-[28px]">rate_review</span>
+          <div className="text-[15px] font-semibold text-[var(--color-on-surface)] mt-3">Read customer reviews</div>
+          <div className="text-[12.5px] text-[var(--color-on-surface-variant)] mt-1 leading-relaxed">See what 3,000+ verified buyers are saying.</div>
+        </button>
+        <button onClick={onFaq} className="bg-white rounded-3xl p-6 soft-shadow border border-[var(--color-outline-variant)]/40 hover:border-[var(--color-primary)] transition text-left">
+          <span className="material-symbols-outlined icon-fill text-[var(--color-accent-coral)] text-[28px]">help</span>
+          <div className="text-[15px] font-semibold text-[var(--color-on-surface)] mt-3">Explore FAQs</div>
+          <div className="text-[12.5px] text-[var(--color-on-surface-variant)] mt-1 leading-relaxed">Quick answers on delivery, returns and payment.</div>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ============================ STICKY MOBILE CTA ============================ */
+function StickyMobileCTA({ tab, onShop }: { tab: TabKey; onShop: () => void }) {
+  const show = ["home", "about", "contact", "faq", "reviews", "cases", "clinics", "journal", "store", "shipping", "sustainability", "verification", "privacy", "terms", "accessibility", "thankyou"].includes(tab);
+  if (!show) return null;
+  return (
+    <div className="md:hidden fixed bottom-[84px] left-4 z-[140]">
+      <button onClick={onShop} className="flex items-center gap-2 bg-[var(--color-primary)] text-white pl-4 pr-5 py-3 rounded-full shadow-xl hover:scale-105 transition active:scale-95">
+        <span className="material-symbols-outlined text-[20px]">shopping_bag</span>
+        <span className="text-[12px] font-bold uppercase tracking-widest">Shop now</span>
+      </button>
+    </div>
   );
 }
 
@@ -2542,6 +2799,7 @@ function Footer({ setTab }: { setTab: (tab: TabKey) => void }) {
             <h6 className="text-[11px] uppercase tracking-widest font-semibold text-[var(--color-primary)] mb-4">Information</h6>
             <ul className="space-y-2.5 text-[14px] text-[var(--color-on-surface-variant)]">
               <li><LinkButton tab="about">Our Philosophy</LinkButton></li>
+              <li><LinkButton tab="cases">Case Studies</LinkButton></li>
               <li><LinkButton tab="sustainability">Sustainability</LinkButton></li>
               <li><LinkButton tab="verification">Dermatologist Verified</LinkButton></li>
               <li><LinkButton tab="shipping">Returns & Shipping</LinkButton></li>
