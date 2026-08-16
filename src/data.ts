@@ -63,6 +63,10 @@ export type Order = {
   placedAt: number;
   updatedAt: number;
   history: OrderStatusEvent[];
+  phone?: string;
+  address?: string;
+  paymentMethod?: string;
+  paymentReference?: string;
 };
 
 /* ---------------- Reviews ---------------- */

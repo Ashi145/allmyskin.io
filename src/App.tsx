@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   getSession, logout, Session,
   ADMIN_STRING_KEY, getAdminString, setAdminString,
@@ -20,12 +20,24 @@ import VendorPortal from "./components/VendorPortal";
 import ClinicDirectory from "./components/ClinicDirectory";
 import ClinicPortal from "./components/ClinicPortal";
 import { Breadcrumbs } from "./components/Breadcrumbs";
+import CheckoutPage from "./components/CheckoutPage";
+import { subscribeToNewsletter } from "./newsletter";
 
 type TabKey = "home" | "shop" | "about" | "contact" | "account" | "admin" | "journal" | "faq" | "store" | "shipping" | "sustainability" | "verification" | "privacy" | "terms" | "accessibility" | "orders" | "wishlist" | "vendor" | "clinics" | "clinicportal" | "reviews" | "cases" | "thankyou";
 type ContentTabKey = Exclude<TabKey, "home" | "shop" | "about" | "contact" | "account" | "admin" | "orders" | "wishlist" | "vendor" | "clinics" | "clinicportal" | "reviews" | "faq" | "cases" | "thankyou">;
 
 type CartItem = { productId: string; qty: number };
 const INVENTORY_KEY = "ams_app_v5_inventory";
+
+/* Privacy: never render a full email address — only a masked preview. */
+function maskEmail(email: string): string {
+  const at = email.indexOf("@");
+  if (at <= 0) return "***";
+  const local = email.slice(0, at);
+  const domain = email.slice(at);
+  const keep = local.length <= 2 ? 1 : 2;
+  return local.slice(0, keep) + "***" + domain;
+}
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(() => getSession());
@@ -160,6 +172,7 @@ export default function App() {
 
   const [productOpen, setProductOpen] = useState<string | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [signedOutModal, setSignedOutModal] = useState(false);
   const [justCheckedOut, setJustCheckedOut] = useState(false);
 
@@ -191,6 +204,8 @@ export default function App() {
   const cartCount = cart.reduce((s, c) => s + c.qty, 0);
   const cartFull = cart.map(c => ({ ...c, p: products.find(p => p.id === c.productId)! })).filter(c => c.p);
   const subtotal = cartFull.reduce((s, c) => s + c.p.price * c.qty, 0);
+  const shipping = subtotal >= 100000 ? 0 : 10000;
+  const total = subtotal + shipping;
 
   const requireUser = (action: string): boolean => {
     if (isGuest) {
@@ -275,6 +290,7 @@ export default function App() {
             onJournal={() => goTo("journal")}
             onReviews={() => goTo("reviews")}
             onThanks={() => goTo("thankyou")}
+            onNewsletterSubscribe={subscribeToNewsletter}
             onProduct={(id) => setProductOpen(id)}
             onAddToCart={addToCart}
           />
@@ -480,6 +496,29 @@ export default function App() {
           onClose={() => setCartOpen(false)}
           onCheckout={() => {
             if (!requireUser("complete checkout")) return;
+            if (!cartFull.length) return;
+            setCartOpen(false);
+            setCheckoutOpen(true);
+          }}
+          onRemove={(id) => setCart(prev => prev.filter(c => c.productId !== id))}
+          onQty={(id, delta) => setCart(prev => prev.map(c => {
+            if (c.productId !== id) return c;
+            const stock = products.find(p => p.id === id)?.stock ?? 1;
+            return { ...c, qty: Math.min(stock, Math.max(1, c.qty + delta)) };
+          }))}
+        />
+      )}
+
+      {/* Payment is collected by the selected provider before this creates the order. */}
+      {checkoutOpen && (
+        <CheckoutPage
+          session={session}
+          cartFull={cartFull}
+          subtotal={subtotal}
+          shipping={shipping}
+          total={total}
+          onCancel={() => setCheckoutOpen(false)}
+          onConfirm={(payment) => {
             setProducts(prev => prev.map(p => {
               const item = cart.find(c => c.productId === p.id);
               if (!item) return p;
@@ -495,9 +534,13 @@ export default function App() {
             const newOrder: Order = {
               id: "ord_" + now.toString(36) + Math.random().toString(36).slice(2, 6),
               uid: session.uid,
-              customerName: session.name,
+              customerName: payment.name || session.name,
               items: orderItems,
               subtotal,
+              phone: payment.phone,
+              address: payment.address,
+              paymentMethod: payment.paymentMethod,
+              paymentReference: payment.paymentReference,
               status: "placed",
               placedAt: now,
               updatedAt: now,
@@ -507,15 +550,9 @@ export default function App() {
 
             setJustCheckedOut(true);
             const hadPurchases = session.role !== "guest";
-            setToast(hadPurchases ? "Order placed! Alia's full protocols are now unlocked." : `Order placed for ${UGX(subtotal)} - Asante! Delivery within 24h.`);
-            setCart([]); setCartOpen(false);
+            setToast(hadPurchases ? "Order placed! Alia's full protocols are now unlocked." : `Order placed for ${UGX(total)} - Asante! Delivery within 24h.`);
+            setCart([]); setCheckoutOpen(false);
           }}
-          onRemove={(id) => setCart(prev => prev.filter(c => c.productId !== id))}
-          onQty={(id, delta) => setCart(prev => prev.map(c => {
-            if (c.productId !== id) return c;
-            const stock = products.find(p => p.id === id)?.stock ?? 1;
-            return { ...c, qty: Math.min(stock, Math.max(1, c.qty + delta)) };
-          }))}
         />
       )}
 
@@ -710,7 +747,7 @@ function BottomNav({ tab, setTab, isAdmin, isVendor, isClinic, cartCount }: { ta
 }
 
 /* ============================ HOME TAB ============================ */
-function HomeTab({ adminString, products, onShop, onAbout, onJournal, onReviews, onThanks, onProduct, onAddToCart }: {
+function HomeTab({ adminString, products, onShop, onAbout, onJournal, onReviews, onThanks, onNewsletterSubscribe, onProduct, onAddToCart }: {
   adminString: string;
   products: Product[];
   onShop: () => void;
@@ -718,6 +755,7 @@ function HomeTab({ adminString, products, onShop, onAbout, onJournal, onReviews,
   onJournal: () => void;
   onReviews: () => void;
   onThanks: () => void;
+  onNewsletterSubscribe: (email: string) => Promise<void>;
   onProduct: (id: string) => void;
   onAddToCart: (id: string) => void;
 }) {
@@ -939,20 +977,58 @@ function HomeTab({ adminString, products, onShop, onAbout, onJournal, onReviews,
           <p className="text-[15px] sm:text-[17px] text-[var(--color-on-surface-variant)] mb-8 max-w-xl mx-auto">
             Sign up now to receive expert tips, exclusive early access to new product launches, and 10% off your first order.
           </p>
-          <form className="flex flex-col sm:flex-row gap-3 max-w-lg mx-auto" onSubmit={(e) => { e.preventDefault(); onThanks(); }}>
-            <input
-              type="email"
-              required
-              placeholder="Enter your email address"
-              className="flex-1 bg-white border border-[var(--color-outline-variant)] rounded-full px-6 py-4 sm:py-5 text-[14px] focus:ring-2 focus:ring-[var(--color-primary)]/20 focus:border-[var(--color-primary)] outline-none transition"
-            />
-            <button className="bg-[var(--color-primary)] text-white px-7 py-4 sm:py-5 rounded-full text-[13px] uppercase tracking-widest font-semibold hover:bg-[var(--color-primary-fixed-dim)] hover:text-[var(--color-primary)] transition shadow-lg flex items-center justify-center gap-2">
-              Subscribe <span className="material-symbols-outlined text-[18px]">mail</span>
-            </button>
-          </form>
+          <NewsletterForm onSubscribe={onNewsletterSubscribe} onSuccess={onThanks} />
         </div>
       </section>
     </>
+  );
+}
+
+function NewsletterForm({ onSubscribe, onSuccess }: { onSubscribe: (email: string) => Promise<void>; onSuccess: () => void }) {
+  const [email, setEmail] = useState("");
+  const [consent, setConsent] = useState(false);
+  const [status, setStatus] = useState<"idle" | "sending" | "error">("idle");
+  const [message, setMessage] = useState("");
+
+  const submit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!consent) {
+      setStatus("error");
+      setMessage("Please confirm that you want to receive product news.");
+      return;
+    }
+    setStatus("sending");
+    setMessage("");
+    try {
+      await onSubscribe(email.trim());
+      onSuccess();
+    } catch (error) {
+      setStatus("error");
+      setMessage(error instanceof Error ? error.message : "We couldn't subscribe you right now.");
+    }
+  };
+
+  return (
+    <form className="max-w-lg mx-auto" onSubmit={submit}>
+      <div className="flex flex-col sm:flex-row gap-3">
+        <input
+          type="email"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="Enter your email address"
+          className="flex-1 bg-white border border-[var(--color-outline-variant)] rounded-full px-6 py-4 sm:py-5 text-[14px] focus:ring-2 focus:ring-[var(--color-primary)]/20 focus:border-[var(--color-primary)] outline-none transition"
+        />
+        <button disabled={status === "sending"} className="bg-[var(--color-primary)] text-white px-7 py-4 sm:py-5 rounded-full text-[13px] uppercase tracking-widest font-semibold hover:bg-[var(--color-primary-fixed-dim)] hover:text-[var(--color-primary)] transition shadow-lg flex items-center justify-center gap-2 disabled:opacity-60">
+          {status === "sending" ? "Adding…" : "Subscribe"} <span className="material-symbols-outlined text-[18px]">mail</span>
+        </button>
+      </div>
+      <label className="mt-3 flex items-start gap-2 text-left text-[12px] text-[var(--color-on-surface-variant)] cursor-pointer">
+        <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-0.5 accent-[var(--color-primary)]" />
+        <span>I agree to receive product news and skincare updates by email. I can unsubscribe at any time.</span>
+      </label>
+      {status === "error" && <p className="mt-2 text-left text-[12px] text-[var(--color-error)]">{message}</p>}
+    </form>
   );
 }
 
@@ -1360,7 +1436,11 @@ function AccountTab({ session, onLogout, orders, products, theme, setTheme }: { 
       <div className="grid lg:grid-cols-[300px_1fr] gap-6">
         {/* SIDEBAR */}
         <aside className="bg-[var(--color-surface-cream)] rounded-3xl p-6 soft-shadow h-fit">
-          <div className="w-20 h-20 rounded-full avatar-placeholder text-[28px]">{(session.name[0] || "U").toUpperCase()}</div>
+          {session.picture ? (
+            <img src={session.picture} alt={session.name} className="w-20 h-20 rounded-full object-cover" />
+          ) : (
+            <div className="w-20 h-20 rounded-full avatar-placeholder text-[28px]">{(session.name[0] || "U").toUpperCase()}</div>
+          )}
           <div className="text-[17px] font-semibold text-[var(--color-primary)] mt-4">{session.name}</div>
           <div className="text-[13px] text-[var(--color-on-surface-variant)]">{session.email}</div>
           <div className="mt-2 inline-flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-bold bg-[var(--color-primary-container)]/40 text-[var(--color-on-primary-container)] px-2.5 py-1 rounded-full">
@@ -1757,7 +1837,7 @@ function AdminPanel({ adminString, setAdminString, products, setProducts, orders
                     <tr key={a.uid} className="border-t border-white/5">
                       <td className="py-3.5">
                         <div className="font-semibold text-white">{a.name}</div>
-                        <div className="text-[11px] text-white/50">{a.email}</div>
+                        <div className="text-[11px] text-white/50">{maskEmail(a.email)}</div>
                       </td>
                       <td>
                         <span className={`text-[10px] uppercase tracking-widest font-bold px-2.5 py-1 rounded-full ${a.role === "admin" ? "bg-[#FA9090]/20 text-[#FA9090] border border-[#FA9090]/30" : "bg-white/5 text-white/70 border border-white/10"}`}>

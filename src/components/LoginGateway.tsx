@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { loginWithCredentials, loginAsGuest, registerAccount, Session } from "../auth";
 import { BrandLogo } from "./BrandLogo";
+import GoogleSignIn from "./GoogleSignIn";
 
 type Props = {
   onAuthed: (s: Session) => void;
@@ -22,30 +23,32 @@ export default function LoginGateway({ onAuthed }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setBusy(true);
-    setTimeout(() => {
-      const r = loginWithCredentials(email, password);
-      setBusy(false);
+    try {
+      const r = await loginWithCredentials(email, password);
       if (!r.ok || !r.session) { setError(r.error || "Login failed"); return; }
       onAuthed(r.session);
-    }, 280);
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const handleRegister = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setBusy(true);
-    setTimeout(() => {
-      const r = registerAccount({ name: rName, email: rEmail, password: rPassword, phone: rPhone, category: rCategory });
-      if (!r.ok || !r.account) { setBusy(false); setError(r.error || "Registration failed"); return; }
-      const login = loginWithCredentials(rEmail, rPassword);
-      setBusy(false);
+    try {
+      const r = await registerAccount({ name: rName, email: rEmail, password: rPassword, phone: rPhone, category: rCategory });
+      if (!r.ok || !r.account) { setError(r.error || "Registration failed"); return; }
+      const login = await loginWithCredentials(rEmail, rPassword);
       if (!login.ok || !login.session) { setError(login.error || "Auto-login failed"); return; }
       onAuthed(login.session);
-    }, 320);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const handleGuest = () => {
@@ -216,6 +219,9 @@ export default function LoginGateway({ onAuthed }: Props) {
               </form>
             )}
 
+            {/* Google sign-in */}
+            <GoogleSignIn onAuthed={(s) => { setError(null); onAuthed(s); }} />
+
             {/* divider */}
             <div className="flex items-center gap-3 my-6">
               <div className="flex-1 h-px bg-white/10" />
@@ -236,11 +242,6 @@ export default function LoginGateway({ onAuthed }: Props) {
               Guests can browse the catalog and read content.<br/>
               <strong className="text-white/60">Checkout and AI clinical mode require a verified account.</strong>
             </p>
-          </div>
-
-          {/* Demo creds hint — user only */}
-          <div className="mt-4 text-center text-[11px] text-white/40 leading-relaxed">
-            <div>Demo: <span className="text-white/60">amina@allmyskin.ug / amina123</span> (user)</div>
           </div>
         </div>
       </div>
